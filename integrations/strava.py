@@ -147,15 +147,20 @@ def parse_activity(raw: dict) -> dict:
         secs = int(pace_sec_per_100 % 60)
         pace = f"{mins}:{secs:02d}/100m"
 
+    # Ensure integer fields are int (Strava sometimes returns floats)
+    avg_hr = raw.get("average_heartrate")
+    avg_power = raw.get("average_watts")
+    elevation = raw.get("total_elevation_gain")
+
     return {
-        "strava_id": raw["id"],
+        "strava_id": int(raw["id"]),
         "date": raw.get("start_date_local", "")[:10],
         "type": SPORT_MAP.get(sport, sport),
         "name": raw.get("name", ""),
         "duration_min": duration_min,
         "distance_km": distance_km,
-        "avg_hr": raw.get("average_heartrate"),
-        "avg_power": raw.get("average_watts"),
-        "elevation_m": raw.get("total_elevation_gain"),
+        "avg_hr": int(avg_hr) if avg_hr else None,
+        "avg_power": int(avg_power) if avg_power else None,
+        "elevation_m": round(elevation, 1) if elevation else None,
         "pace": pace,
     }
