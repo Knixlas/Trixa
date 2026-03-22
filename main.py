@@ -6,12 +6,12 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -90,7 +90,7 @@ WORKOUT_TOOL = {
 }
 
 
-def _build_system_prompt(profile: dict | None) -> str:
+def _build_system_prompt(profile: dict | None, activities: list[dict] | None = None) -> str:
     template = SYSTEM_PROMPT_FILE.read_text(encoding="utf-8")
     now = datetime.now()
     template = (
@@ -104,6 +104,26 @@ def _build_system_prompt(profile: dict | None) -> str:
         template = template.replace("{ATHLETE_PROFILE}", "\n".join(lines))
     else:
         template = template.replace("{ATHLETE_PROFILE}", "Ingen profil tillganglig.")
+
+    # Inject recent Strava activities
+    if activities:
+        lines = []
+        for a in activities[:20]:
+            parts = [f"- {a['date']}: {a['type']} \"{a.get('name', '')}\""]
+            if a.get("duration_min"):
+                parts.append(f"{a['duration_min']} min")
+            if a.get("distance_km"):
+                parts.append(f"{a['distance_km']} km")
+            if a.get("pace"):
+                parts.append(a["pace"])
+            if a.get("avg_hr"):
+                parts.append(f"puls {a['avg_hr']}")
+            if a.get("avg_power"):
+                parts.append(f"{a['avg_power']}W")
+            lines.append(", ".join(parts))
+        template = template.replace("{RECENT_ACTIVITIES}", "\n".join(lines))
+    else:
+        template = template.replace("{RECENT_ACTIVITIES}", "Ingen Strava-koppling eller inga aktiviteter.")
     return template
 
 
@@ -222,9 +242,13 @@ async def chat(req: ChatRequest, request: Request):
     except Exception:
         pass
 
-    # Build system prompt from profile
+    # Build system prompt from profile + activities
     profile = db.get_profile(uid, token)
-    system_prompt = _build_system_prompt(profile)
+    try:
+        activities = db.get_recent_strava_activities(uid, token, days=14)
+    except Exception:
+        activities = None
+    system_prompt = _build_system_prompt(profile, activities)
 
     # Prepare messages
     clean = [{"role": m["role"], "content": m["content"]} for m in req.history[-MAX_HISTORY:]]
@@ -335,4 +359,90 @@ async def clear_conversation(request: Request):
     conv = db.get_conversation(uid, token)
     if conv:
         db.delete_conversation(uid, token, conv["id"])
+    return {"ok": True}
+
+
+# ── Strava ───────────────────────────────────────────────────────
+
+@app.get("/api/strava/connect")
+async def strava_connect(request: Request):
+    uid, _ = _get_auth(request)
+    from integrations.strava import get_authorization_url, sign_state
+    redirect_uri = os.environ.get(
+        "STRAVA_REDIRECT_URI",
+        str(request.base_url).rstrip("/") + "/api/strava/callback",
+    )
+    state = sign_state(uid)
+    url = get_authorization_url(redirect_uri, state)
+    return {"url": url}
+
+
+@app.get("/api/strava/callback")
+async def strava_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    """OAuth callback — browser redirect from Strava."""
+    if error:
+        return RedirectResponse("/?strava=error")
+
+    from integrations.strava import verify_state, exchange_code, get_activities, parse_activity
+    user_id = verify_state(state)
+    if not user_id:
+        return RedirectResponse("/?strava=error")
+
+    redirect_uri = os.environ.get(
+        "STRAVA_REDIRECT_URI",
+        str(request.base_url).rstrip("/") + "/api/strava/callback",
+    )
+
+    try:
+        tokens = exchange_code(code, redirect_uri)
+        db.save_strava_tokens(user_id, tokens)
+
+        # Initial sync (last 30 days)
+        import time
+        after = int(time.time()) - 30 * 86400
+        raw_activities = get_activities(tokens["access_token"], after=after)
+        parsed = [parse_activity(a) for a in raw_activities]
+        db.upsert_strava_activities(user_id, parsed)
+    except Exception as e:
+        print(f"Strava callback error: {e}")
+        return RedirectResponse("/?strava=error")
+
+    return RedirectResponse("/?strava=connected")
+
+
+@app.post("/api/strava/sync")
+async def strava_sync(request: Request):
+    uid, token = _get_auth(request)
+    strava_tokens = db.get_strava_tokens(uid, token)
+    if not strava_tokens:
+        raise HTTPException(400, "Strava ej kopplat")
+
+    from integrations.strava import ensure_fresh_token, get_activities, parse_activity
+
+    # Refresh tokens if needed
+    strava_tokens = ensure_fresh_token(strava_tokens)
+    if strava_tokens.get("_refreshed"):
+        db.update_strava_tokens(uid, strava_tokens)
+
+    # Fetch last 30 days
+    import time
+    after = int(time.time()) - 30 * 86400
+    raw = get_activities(strava_tokens["access_token"], after=after)
+    parsed = [parse_activity(a) for a in raw]
+    count = db.upsert_strava_activities(uid, parsed)
+    return {"synced": count}
+
+
+@app.get("/api/strava/activities")
+async def strava_activities(request: Request, days: int = 14):
+    uid, token = _get_auth(request)
+    strava_tokens = db.get_strava_tokens(uid, token)
+    activities = db.get_recent_strava_activities(uid, token, days=days)
+    return {"activities": activities, "connected": strava_tokens is not None}
+
+
+@app.delete("/api/strava/disconnect")
+async def strava_disconnect(request: Request):
+    uid, _ = _get_auth(request)
+    db.delete_strava_tokens(uid)
     return {"ok": True}

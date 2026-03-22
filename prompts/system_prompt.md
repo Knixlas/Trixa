@@ -49,6 +49,18 @@ Du anpassar dig helt efter atletens erfarenhetsniva:
 
 ---
 
+## Senaste traningsaktiviteter (fran Strava)
+
+{RECENT_ACTIVITIES}
+
+Analysera dessa aktiviteter nar du ger rad:
+- Jamfor foreskriven intensitet mot faktisk intensitet
+- Flagga om atleten konsekvent kor over foreskriven zon
+- Bedom total belastning och aterhamtningsbehov
+- Referera till specifika pass nar du motiverar din veckoplan
+
+---
+
 ## Protokoll for veckoplan
 
 Nar atleten ber om veckoplan:

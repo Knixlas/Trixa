@@ -113,6 +113,27 @@ input:focus { border-color: var(--accent); }
 .tip-box .tip-label { font-size: 0.7rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
 .tip-box .tip-text { font-size: 0.9rem; margin-top: 0.3rem; line-height: 1.5; }
 
+/* ── Strava Activities ── */
+.activities-section { margin-bottom: 1rem; }
+.activities-section h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+.activity-item {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.6rem; background: var(--surface); border-radius: 8px;
+  margin-bottom: 0.4rem; font-size: 0.85rem;
+}
+.activity-icon { font-size: 1.2rem; width: 28px; text-align: center; }
+.activity-details { flex: 1; }
+.activity-details .name { font-weight: 600; }
+.activity-details .stats { color: var(--text-dim); font-size: 0.8rem; }
+.activity-date { color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; }
+.strava-btn {
+  width: 100%; padding: 0.6rem; background: #fc4c02; border: none;
+  border-radius: 8px; color: white; font-size: 0.9rem; font-weight: 600;
+  cursor: pointer; margin-top: 0.5rem;
+}
+.strava-btn:hover { opacity: 0.9; }
+.strava-btn.disconnect { background: transparent; border: 1px solid var(--text-dim); color: var(--text-dim); font-weight: 400; }
+
 /* ── Plan ── */
 .plan-section h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 .plan-content { line-height: 1.7; font-size: 0.9rem; white-space: pre-wrap; }
@@ -211,6 +232,10 @@ input:focus { border-color: var(--accent); }
     </div>
     <div class="cards" id="status-cards"></div>
     <div id="tip-container"></div>
+    <div class="activities-section">
+      <h2>Senaste traning</h2>
+      <div id="strava-activities"></div>
+    </div>
     <div class="plan-section">
       <h2>Veckoplan</h2>
       <div id="plan-content"></div>
@@ -230,6 +255,11 @@ input:focus { border-color: var(--accent); }
   <div id="profile-view" class="view">
     <div class="header"><h1>Profil</h1></div>
     <div class="profile-section" id="profile-info"></div>
+    <div class="profile-section" id="strava-section">
+      <h3>Strava</h3>
+      <div id="strava-status"></div>
+    </div>
+
     <div class="profile-section">
       <h3>Intervals.icu</h3>
       <div class="profile-input">
@@ -403,6 +433,8 @@ function renderHome() {
   document.getElementById('plan-content').innerHTML = planMsg
     ? `<div class="plan-content">${md(planMsg.content)}</div>`
     : `<div class="plan-empty">Ingen veckoplan annu. Ga till Chatt och be Trixa om en!</div>`;
+
+  renderStravaActivities();
 }
 
 // ── Chat ──
@@ -504,6 +536,89 @@ async function pushWorkout(w) {
   } catch { alert('Anslutningsfel'); }
 }
 
+// ── Strava ──
+let stravaData = {activities: [], connected: false};
+
+const SPORT_ICONS = {Lopning:'🏃', Cykel:'🚴', Sim:'🏊', Styrka:'💪', Promenad:'🚶', Vandring:'🥾'};
+
+async function fetchStrava() {
+  try {
+    const r = await fetch('/api/strava/activities?days=14', {headers: hdrs()});
+    if (r.ok) stravaData = await r.json();
+  } catch {}
+}
+
+function renderStravaActivities() {
+  const el = document.getElementById('strava-activities');
+  if (!stravaData.connected) {
+    el.innerHTML = `<button class="strava-btn" onclick="connectStrava()">Koppla Strava</button>`;
+    return;
+  }
+  if (!stravaData.activities.length) {
+    el.innerHTML = `<div style="color:var(--text-dim);font-size:0.85rem">Inga aktiviteter senaste 14 dagarna</div>
+      <button class="strava-btn" onclick="syncStrava()">Synka Strava</button>`;
+    return;
+  }
+  let html = '';
+  for (const a of stravaData.activities.slice(0, 7)) {
+    const icon = SPORT_ICONS[a.type] || '🏋️';
+    const stats = [a.duration_min ? `${Math.round(a.duration_min)}min` : '',
+                   a.distance_km ? `${a.distance_km}km` : '',
+                   a.pace || '',
+                   a.avg_hr ? `${a.avg_hr}bpm` : ''].filter(Boolean).join(' · ');
+    html += `<div class="activity-item">
+      <div class="activity-icon">${icon}</div>
+      <div class="activity-details">
+        <div class="name">${esc(a.name || a.type)}</div>
+        <div class="stats">${stats}</div>
+      </div>
+      <div class="activity-date">${a.date?.slice(5) || ''}</div>
+    </div>`;
+  }
+  html += `<button class="strava-btn" onclick="syncStrava()" style="margin-top:0.5rem">Synka Strava</button>`;
+  el.innerHTML = html;
+}
+
+async function connectStrava() {
+  try {
+    const r = await fetch('/api/strava/connect', {headers: hdrs()});
+    const data = await r.json();
+    if (data.url) window.location.href = data.url;
+  } catch (e) { alert('Kunde inte koppla Strava: ' + e.message); }
+}
+
+async function syncStrava() {
+  try {
+    const r = await fetch('/api/strava/sync', {method: 'POST', headers: hdrs()});
+    const data = await r.json();
+    if (r.ok) {
+      alert(`Synkat ${data.synced} aktiviteter!`);
+      await fetchStrava();
+      renderStravaActivities();
+    } else { alert('Sync misslyckades: ' + (data.detail || '?')); }
+  } catch (e) { alert('Fel: ' + e.message); }
+}
+
+async function disconnectStrava() {
+  if (!confirm('Koppla fran Strava?')) return;
+  try {
+    await fetch('/api/strava/disconnect', {method: 'DELETE', headers: hdrs()});
+    stravaData = {activities: [], connected: false};
+    renderStravaActivities();
+    renderProfile();
+  } catch {}
+}
+
+function renderStravaProfile() {
+  const el = document.getElementById('strava-status');
+  if (stravaData.connected) {
+    el.innerHTML = `<div class="profile-row"><span class="label">Status</span><span style="color:#2ecc71">Kopplad</span></div>
+      <button class="strava-btn disconnect" onclick="disconnectStrava()" style="margin-top:0.5rem">Koppla fran</button>`;
+  } else {
+    el.innerHTML = `<button class="strava-btn" onclick="connectStrava()">Koppla Strava</button>`;
+  }
+}
+
 // ── Profile ──
 async function renderProfile() {
   document.getElementById('profile-info').innerHTML = `<h3>Konto</h3>
@@ -520,6 +635,7 @@ async function renderProfile() {
       document.getElementById('icu-athlete').value = d.profile.intervals_athlete_id || '';
     }
   } catch {}
+  renderStravaProfile();
 }
 
 async function saveIntervals() {
@@ -551,7 +667,18 @@ async function showApp() {
     const d = await r.json();
     chatHistory = d.messages || [];
   } catch { chatHistory = []; }
+  await fetchStrava();
   renderHome(); renderChat(); renderProfile();
+
+  // Check for Strava callback result
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('strava') === 'connected') {
+    alert('Strava kopplat!');
+    history.replaceState({}, '', '/');
+  } else if (params.get('strava') === 'error') {
+    alert('Strava-koppling misslyckades');
+    history.replaceState({}, '', '/');
+  }
 }
 
 if (user) showApp();

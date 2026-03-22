@@ -238,3 +238,75 @@ def save_intervals_settings(user_id: str, access_token: str, api_key: str, athle
         "intervals_api_key": api_key,
         "intervals_athlete_id": athlete_id,
     })
+
+
+# ── Strava ───────────────────────────────────────────────────────
+
+def save_strava_tokens(user_id: str, tokens: dict):
+    """Upsert Strava tokens (uses admin client for insert)."""
+    admin = get_admin_client()
+    existing = admin.table("strava_tokens").select("id").eq("user_id", user_id).execute()
+    data = {
+        "user_id": user_id,
+        "athlete_id": tokens.get("athlete", {}).get("id", tokens.get("athlete_id", 0)),
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_token"],
+        "expires_at": tokens["expires_at"],
+    }
+    if existing.data:
+        admin.table("strava_tokens").update(data).eq("user_id", user_id).execute()
+    else:
+        admin.table("strava_tokens").insert(data).execute()
+
+
+def get_strava_tokens(user_id: str, access_token: str) -> dict | None:
+    client = get_client()
+    client.postgrest.auth(access_token)
+    result = client.table("strava_tokens").select("*").eq("user_id", user_id).execute()
+    return result.data[0] if result.data else None
+
+
+def update_strava_tokens(user_id: str, new_tokens: dict):
+    """Update tokens after refresh (admin client)."""
+    admin = get_admin_client()
+    admin.table("strava_tokens").update({
+        "access_token": new_tokens["access_token"],
+        "refresh_token": new_tokens["refresh_token"],
+        "expires_at": new_tokens["expires_at"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("user_id", user_id).execute()
+
+
+def delete_strava_tokens(user_id: str):
+    admin = get_admin_client()
+    admin.table("strava_tokens").delete().eq("user_id", user_id).execute()
+
+
+def upsert_strava_activities(user_id: str, activities: list[dict]) -> int:
+    """Batch upsert activities. Returns count."""
+    admin = get_admin_client()
+    count = 0
+    for act in activities:
+        act["user_id"] = user_id
+        existing = admin.table("strava_activities").select("id").eq("strava_id", act["strava_id"]).execute()
+        if existing.data:
+            admin.table("strava_activities").update(act).eq("strava_id", act["strava_id"]).execute()
+        else:
+            admin.table("strava_activities").insert(act).execute()
+        count += 1
+    return count
+
+
+def get_recent_strava_activities(user_id: str, access_token: str, days: int = 14) -> list[dict]:
+    client = get_client()
+    client.postgrest.auth(access_token)
+    since = (date.today() - timedelta(days=days)).isoformat()
+    result = (
+        client.table("strava_activities")
+        .select("*")
+        .eq("user_id", user_id)
+        .gte("date", since)
+        .order("date", desc=True)
+        .execute()
+    )
+    return result.data or []
