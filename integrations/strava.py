@@ -109,21 +109,34 @@ def verify_state(state: str) -> str | None:
 
 # ── Activities API ───────────────────────────────────────────────
 
-def get_activities(access_token: str, after: int | None = None, per_page: int = 50) -> list[dict]:
-    """Fetch activities from Strava API."""
-    params = {"per_page": per_page}
-    if after:
-        params["after"] = after
-    resp = requests.get(
-        f"{STRAVA_API_BASE}/athlete/activities",
-        headers={"Authorization": f"Bearer {access_token}"},
-        params=params,
-        timeout=15,
-    )
-    if resp.status_code == 429:
-        return []  # Rate limited
-    resp.raise_for_status()
-    return resp.json()
+def get_activities(access_token: str, after: int | None = None,
+                    per_page: int = 200, max_pages: int = 5) -> list[dict]:
+    """Fetch activities from Strava API with pagination.
+
+    Strava returns max 200 per page. We paginate up to max_pages
+    to get a full history (200 * 5 = 1000 activities max).
+    """
+    all_activities = []
+    for page in range(1, max_pages + 1):
+        params = {"per_page": per_page, "page": page}
+        if after:
+            params["after"] = after
+        resp = requests.get(
+            f"{STRAVA_API_BASE}/athlete/activities",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params=params,
+            timeout=30,
+        )
+        if resp.status_code == 429:
+            break  # Rate limited
+        resp.raise_for_status()
+        batch = resp.json()
+        if not batch:
+            break  # No more activities
+        all_activities.extend(batch)
+        if len(batch) < per_page:
+            break  # Last page
+    return all_activities
 
 
 def parse_activity(raw: dict) -> dict:
