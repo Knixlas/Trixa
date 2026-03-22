@@ -360,10 +360,16 @@ async def save_intervals_settings(request: Request):
 @app.post("/api/discount/apply")
 async def apply_discount(req: DiscountRequest, request: Request):
     uid, _ = _get_auth(request)
-    ok, msg = db.apply_discount_code(uid, req.code)
-    if ok:
-        return {"ok": True, "message": msg}
-    raise HTTPException(400, msg)
+    try:
+        ok, msg = db.apply_discount_code(uid, req.code)
+        if ok:
+            return {"ok": True, "message": msg}
+        raise HTTPException(400, msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Discount error: {e}")
+        raise HTTPException(500, f"Fel vid rabattkod: {str(e)}")
 
 
 # ── Stripe Payments ──────────────────────────────────────────────

@@ -929,10 +929,11 @@ async function applyDiscount() {
       method: 'POST', headers: hdrs(),
       body: JSON.stringify({code}),
     });
-    const data = await r.json();
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = {detail: text}; }
     if (r.ok) {
       alert(data.message || 'Rabattkod aktiverad!');
-      // Refresh subscription info
       const sr = await fetch('/api/subscription', {headers: hdrs()});
       if (sr.ok) {
         const sd = await sr.json();
