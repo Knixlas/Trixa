@@ -332,6 +332,111 @@ def _save_conv(uid, token, history, message, response):
         pass
 
 
+# ── Coach Brief (for dashboard) ──────────────────────────────────
+
+@app.get("/api/coach/brief")
+async def coach_brief(request: Request):
+    """Generate Trixa's current analysis for the dashboard 'Tank pa' section.
+    Returns a short coaching nudge based on recent activities + coach memory.
+    Cached per user per day to avoid repeated API calls.
+    """
+    uid, token = _get_auth(request)
+
+    # Check if we have a cached brief from today
+    try:
+        cached = db.get_coach_brief(uid, token)
+        if cached:
+            return {"brief": cached["brief"], "follow_up": cached.get("follow_up")}
+    except Exception:
+        pass
+
+    # Build context from Strava + profile
+    profile = db.get_profile(uid, token)
+    try:
+        activities = db.get_recent_strava_activities(uid, token, days=14)
+    except Exception:
+        activities = []
+
+    # Get coach memory observations
+    try:
+        memories = db.get_coach_memories(uid, token)
+    except Exception:
+        memories = []
+
+    if not activities and not memories:
+        return {"brief": "Koppla Strava eller chatta med mig sa jag kan lara kanna dig!", "follow_up": None}
+
+    # Build a compact context for Claude
+    act_lines = []
+    for a in (activities or [])[:10]:
+        parts = [f"{a['date']}: {a['type']}"]
+        if a.get('duration_min'): parts.append(f"{a['duration_min']}min")
+        if a.get('distance_km'): parts.append(f"{a['distance_km']}km")
+        if a.get('pace'): parts.append(a['pace'])
+        if a.get('avg_hr'): parts.append(f"puls {a['avg_hr']}")
+        act_lines.append(", ".join(parts))
+
+    mem_lines = [f"- [{m.get('category','')}] {m.get('observation','')}" for m in (memories or [])[:5]]
+
+    name = ""
+    if profile:
+        name = profile.get("name") or profile.get("display_name") or ""
+
+    now = datetime.now()
+    weekday = ["mandag","tisdag","onsdag","torsdag","fredag","lordag","sondag"][now.weekday()]
+
+    api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    system = f"""Du ar Trixa, personlig tranare. Skriv en kort coachanalys (max 3 meningar) baserat pa atletens senaste traning.
+
+Regler:
+- Var direkt, varm, aldrig fluffig
+- Referera till faktisk data (pass, puls, fart)
+- Ge ETT konkret rad for kommande dagar
+- Om du ser ett monster (t.ex. for hard traning), namna det
+- Om det ar relevant, lagg till en uppfoljning: "Aterkommer pa [dag]"
+- Svara pa svenska
+- Tilltala atleten vid namn om du vet det
+
+Idag ar {weekday} {now.strftime('%Y-%m-%d')}."""
+
+    user_msg = f"""Atlet: {name}
+
+Senaste 14 dagars traning:
+{chr(10).join(act_lines) if act_lines else 'Ingen data'}
+
+Minnesanteckningar om atleten:
+{chr(10).join(mem_lines) if mem_lines else 'Inga anteckningar annu'}
+
+Skriv en kort dashboardanalys (max 3 meningar + eventuell uppfoljningsdag)."""
+
+    try:
+        response = api_client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=300,
+            system=system,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        brief_text = response.content[0].text
+
+        # Try to extract follow-up day
+        follow_up = None
+        import re
+        fu_match = re.search(r'[Aa]terkommer?\s+(?:pa\s+)?(\w+dag)', brief_text)
+        if fu_match:
+            follow_up = fu_match.group(1).capitalize()
+
+        # Cache the brief
+        try:
+            db.save_coach_brief(uid, brief_text, follow_up)
+        except Exception:
+            pass
+
+        return {"brief": brief_text, "follow_up": follow_up}
+    except Exception as e:
+        print(f"Coach brief error: {e}")
+        return {"brief": "Jag analyserar din traning...", "follow_up": None}
+
+
 # ── Intervals.icu ────────────────────────────────────────────────
 
 @app.post("/api/intervals/push")

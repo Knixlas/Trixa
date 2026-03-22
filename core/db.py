@@ -310,3 +310,66 @@ def get_recent_strava_activities(user_id: str, access_token: str, days: int = 14
         .execute()
     )
     return result.data or []
+
+
+# ── Coach Memory ────────────────────────────────────────────────
+
+def get_coach_memories(user_id: str, access_token: str) -> list[dict]:
+    """Get coach memory observations for a user, ordered by confidence."""
+    client = get_client()
+    client.postgrest.auth(access_token)
+    try:
+        result = (
+            client.table("coach_memory")
+            .select("category, observation, confidence, times_seen")
+            .eq("user_id", user_id)
+            .order("confidence", desc=True)
+            .limit(10)
+            .execute()
+        )
+        return result.data or []
+    except Exception:
+        return []
+
+
+# ── Coach Brief (dashboard cache) ───────────────────────────────
+
+def get_coach_brief(user_id: str, access_token: str) -> dict | None:
+    """Get today's cached coach brief."""
+    client = get_client()
+    client.postgrest.auth(access_token)
+    today = date.today().isoformat()
+    try:
+        result = (
+            client.table("coach_briefs")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("brief_date", today)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+    except Exception:
+        return None
+
+
+def save_coach_brief(user_id: str, brief: str, follow_up: str | None = None):
+    """Save or update today's coach brief."""
+    admin = get_admin_client()
+    today = date.today().isoformat()
+    existing = (
+        admin.table("coach_briefs")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("brief_date", today)
+        .execute()
+    )
+    data = {
+        "user_id": user_id,
+        "brief_date": today,
+        "brief": brief,
+        "follow_up": follow_up,
+    }
+    if existing.data:
+        admin.table("coach_briefs").update(data).eq("id", existing.data[0]["id"]).execute()
+    else:
+        admin.table("coach_briefs").insert(data).execute()

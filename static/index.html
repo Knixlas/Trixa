@@ -524,16 +524,8 @@ function renderHome() {
     <div class="status-chip"><span class="dot ${stravaDot}"></span>${stravaLabel}</div>
     <div class="status-chip">${stravaData.activities.length} pass / 14d</div>`;
 
-  // Tip box — Trixa says
-  const lastMsg = [...chatHistory].reverse().find(m => m.role === 'assistant');
-  const tip = document.getElementById('tip-container');
-  if (lastMsg) {
-    const ps = lastMsg.content.split('\n\n').filter(p => p.trim());
-    const t = (ps[ps.length-1] || '').substring(0, 200);
-    tip.innerHTML = `<div class="tip-box"><div class="tip-label">Tank pa</div><div class="tip-text">${esc(t)}</div></div>`;
-  } else {
-    tip.innerHTML = `<div class="tip-box"><div class="tip-label">Tank pa</div><div class="tip-text">Fraga Trixa i chatten for att fa personlig coaching!</div></div>`;
-  }
+  // Tip box — fetch from coach brief API
+  fetchCoachBrief();
 
   // Upcoming 3 days
   renderUpcoming();
@@ -550,6 +542,34 @@ function renderHome() {
     : `<div class="plan-empty">Be Trixa om en veckoplan i chatten!</div>`;
 
   renderStravaActivities();
+}
+
+let cachedBrief = null;
+
+async function fetchCoachBrief() {
+  const tip = document.getElementById('tip-container');
+  if (cachedBrief) {
+    renderBrief(cachedBrief);
+    return;
+  }
+  tip.innerHTML = `<div class="tip-box"><div class="tip-label">Trixa tanker...</div><div class="tip-text" style="opacity:0.5">Analyserar din traning...</div></div>`;
+  try {
+    const r = await fetch('/api/coach/brief', {headers: hdrs()});
+    if (r.ok) {
+      cachedBrief = await r.json();
+      renderBrief(cachedBrief);
+    }
+  } catch {}
+}
+
+function renderBrief(data) {
+  const tip = document.getElementById('tip-container');
+  let html = `<div class="tip-box"><div class="tip-label">Trixa sager</div><div class="tip-text">${md(data.brief)}</div>`;
+  if (data.follow_up) {
+    html += `<div style="margin-top:0.4rem;font-size:0.75rem;opacity:0.7">&#x1F4C5; Uppfoljning: ${esc(data.follow_up)}</div>`;
+  }
+  html += `</div>`;
+  tip.innerHTML = html;
 }
 
 function renderUpcoming() {
@@ -590,7 +610,7 @@ function renderUpcoming() {
     }
     html += `<div class="upcoming-day">
       <div class="day-label">${label}</div>
-      <div class="day-desc">${dayLine ? esc(dayLine.substring(0, 80)) : '<span style="color:var(--text-dim)">Vila?</span>'}</div>
+      <div class="day-desc">${dayLine ? esc(dayLine) : '<span style="color:var(--text-dim)">Vila?</span>'}</div>
     </div>`;
   }
   el.innerHTML = html;
@@ -607,8 +627,7 @@ function renderZones() {
     return;
   }
   // Show the zones message as formatted text
-  const relevant = zonesMsg.content.substring(0, 500);
-  el.innerHTML = `<div style="font-size:0.8rem;line-height:1.5">${md(relevant)}</div>`;
+  el.innerHTML = `<div style="font-size:0.8rem;line-height:1.5">${md(zonesMsg.content)}</div>`;
 }
 
 // ── Chat ──
