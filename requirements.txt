@@ -3,5 +3,6 @@ fastapi
 gunicorn
 python-dotenv
 requests
+stripe
 supabase
 uvicorn[standard]

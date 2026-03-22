@@ -360,6 +360,13 @@ input:focus { border-color: var(--accent); }
       <button class="btn btn-sm" onclick="saveIntervals()">Spara</button>
     </div>
     <div class="profile-section" id="membership-section"></div>
+    <div class="profile-section" id="discount-section">
+      <h3>Rabattkod</h3>
+      <div style="display:flex;gap:0.5rem">
+        <input type="text" id="discount-input" placeholder="Ange kod" style="flex:1;text-transform:uppercase">
+        <button class="btn btn-sm" onclick="applyDiscount()">Aktivera</button>
+      </div>
+    </div>
     <div style="margin-top:1rem;display:flex;gap:0.5rem">
       <button class="btn btn-secondary btn-sm" onclick="newConversation()" style="flex:1">Ny konversation</button>
       <button class="btn btn-danger btn-sm" onclick="doLogout()" style="flex:1">Logga ut</button>
@@ -843,9 +850,27 @@ async function renderProfile() {
   document.getElementById('profile-info').innerHTML = `<h3>Konto</h3>
     <div class="profile-row"><span class="label">Namn</span><span>${esc(user?.name||'')}</span></div>
     <div class="profile-row"><span class="label">E-post</span><span>${esc(user?.email||'')}</span></div>`;
-  const tl = user?.trial_days > 0 ? `Trial (${user.trial_days}d kvar)` : (user?.tier === 'premium' ? 'Premium' : 'Gratis');
-  document.getElementById('membership-section').innerHTML = `<h3>Medlemskap</h3>
+  const isPremium = user?.tier === 'premium';
+  const isTrialing = user?.trial_days > 0;
+  const tl = isTrialing ? `Trial (${user.trial_days}d kvar)` : (isPremium ? 'Premium' : 'Gratis');
+  let memberHtml = `<h3>Medlemskap</h3>
     <div class="profile-row"><span class="label">Niva</span><span>${tl}</span></div>`;
+  if (isPremium && !isTrialing) {
+    memberHtml += `<button class="btn btn-secondary btn-sm" onclick="manageSubscription()" style="margin-top:0.5rem">Hantera abonnemang</button>`;
+  } else {
+    memberHtml += `
+      <div style="margin-top:0.8rem;padding:0.8rem;background:var(--surface2);border-radius:10px">
+        <div style="font-weight:600;margin-bottom:0.3rem">Uppgradera till Premium</div>
+        <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:0.6rem">
+          Obegransade meddelanden, bilagor, traningspass till klockan
+        </div>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-sm" onclick="startCheckout('monthly')" style="flex:1">99 kr/man</button>
+          <button class="btn btn-sm" onclick="startCheckout('yearly')" style="flex:1;background:var(--accent2)">799 kr/ar</button>
+        </div>
+      </div>`;
+  }
+  document.getElementById('membership-section').innerHTML = memberHtml;
   try {
     const r = await fetch('/api/profile', {headers: hdrs()});
     const d = await r.json();
@@ -864,6 +889,62 @@ async function saveIntervals() {
   try {
     const r = await fetch('/api/intervals/save', {method:'POST', headers:hdrs(), body:JSON.stringify({api_key:k, athlete_id:a})});
     alert(r.ok ? 'Sparat!' : 'Kunde inte spara');
+  } catch (e) { alert('Fel: ' + e.message); }
+}
+
+async function startCheckout(plan) {
+  try {
+    const r = await fetch('/api/stripe/checkout', {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({plan}),
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      alert(err.detail || 'Kunde inte starta betalning');
+      return;
+    }
+    const data = await r.json();
+    if (data.url) window.location.href = data.url;
+  } catch (e) { alert('Fel: ' + e.message); }
+}
+
+async function manageSubscription() {
+  try {
+    const r = await fetch('/api/stripe/portal', {method: 'POST', headers: hdrs()});
+    if (!r.ok) {
+      const err = await r.json();
+      alert(err.detail || 'Kunde inte oppna portal');
+      return;
+    }
+    const data = await r.json();
+    if (data.url) window.location.href = data.url;
+  } catch (e) { alert('Fel: ' + e.message); }
+}
+
+async function applyDiscount() {
+  const code = document.getElementById('discount-input').value.trim();
+  if (!code) return;
+  try {
+    const r = await fetch('/api/discount/apply', {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({code}),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      alert(data.message || 'Rabattkod aktiverad!');
+      // Refresh subscription info
+      const sr = await fetch('/api/subscription', {headers: hdrs()});
+      if (sr.ok) {
+        const sd = await sr.json();
+        user.tier = sd.tier;
+        user.trial_days = sd.trial_days;
+        localStorage.setItem('trixa_user', JSON.stringify(user));
+        renderProfile();
+        renderHome();
+      }
+    } else {
+      alert(data.detail || 'Ogiltig kod');
+    }
   } catch (e) { alert('Fel: ' + e.message); }
 }
 
@@ -889,13 +970,29 @@ async function showApp() {
   await fetchStrava();
   renderHome(); renderChat(); renderProfile();
 
-  // Check for Strava callback result
+  // Check for callback results
   const params = new URLSearchParams(window.location.search);
   if (params.get('strava') === 'connected') {
     alert('Strava kopplat!');
     history.replaceState({}, '', '/');
   } else if (params.get('strava') === 'error') {
     alert('Strava-koppling misslyckades');
+    history.replaceState({}, '', '/');
+  } else if (params.get('payment') === 'success') {
+    // Refresh tier after payment
+    try {
+      const sr = await fetch('/api/subscription', {headers: hdrs()});
+      if (sr.ok) {
+        const sd = await sr.json();
+        user.tier = sd.tier;
+        user.trial_days = sd.trial_days;
+        localStorage.setItem('trixa_user', JSON.stringify(user));
+        renderHome(); renderProfile();
+      }
+    } catch {}
+    alert('Betalning genomford! Valkomna till Premium!');
+    history.replaceState({}, '', '/');
+  } else if (params.get('payment') === 'cancel') {
     history.replaceState({}, '', '/');
   }
 }

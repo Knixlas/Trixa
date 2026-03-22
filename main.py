@@ -366,6 +366,118 @@ async def apply_discount(req: DiscountRequest, request: Request):
     raise HTTPException(400, msg)
 
 
+# ── Stripe Payments ──────────────────────────────────────────────
+
+STRIPE_SECRET = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_PRICE_MONTHLY = os.environ.get("STRIPE_PRICE_MONTHLY", "")
+STRIPE_PRICE_YEARLY = os.environ.get("STRIPE_PRICE_YEARLY", "")
+
+
+@app.post("/api/stripe/checkout")
+async def create_checkout(request: Request):
+    """Create a Stripe Checkout session for subscription."""
+    if not STRIPE_SECRET:
+        raise HTTPException(503, "Betalning ej konfigurerad")
+
+    uid, _ = _get_auth(request)
+    body = await request.json()
+    plan = body.get("plan", "monthly")  # monthly or yearly
+
+    import stripe
+    stripe.api_key = STRIPE_SECRET
+
+    price_id = STRIPE_PRICE_YEARLY if plan == "yearly" else STRIPE_PRICE_MONTHLY
+    if not price_id:
+        raise HTTPException(400, "Prisplan saknas")
+
+    base_url = str(request.base_url).rstrip("/")
+    try:
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            payment_method_types=["card"],
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=f"{base_url}/?payment=success",
+            cancel_url=f"{base_url}/?payment=cancel",
+            client_reference_id=uid,
+            subscription_data={"trial_period_days": 0},
+            metadata={"user_id": uid, "plan": plan},
+        )
+        return {"url": session.url}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events."""
+    if not STRIPE_SECRET or not STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(503, "Webhooks ej konfigurerade")
+
+    import stripe
+    stripe.api_key = STRIPE_SECRET
+
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except Exception as e:
+        raise HTTPException(400, f"Webhook error: {e}")
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        user_id = session.get("client_reference_id") or session.get("metadata", {}).get("user_id")
+        stripe_sub_id = session.get("subscription")
+        stripe_customer_id = session.get("customer")
+        if user_id:
+            db.update_subscription(user_id, {
+                "tier": "premium",
+                "status": "active",
+                "stripe_subscription_id": stripe_sub_id,
+                "stripe_customer_id": stripe_customer_id,
+            })
+            print(f"[stripe] User {user_id} upgraded to premium")
+
+    elif event["type"] in ("customer.subscription.deleted", "customer.subscription.updated"):
+        sub = event["data"]["object"]
+        stripe_sub_id = sub.get("id")
+        status = sub.get("status")
+        # Find user by stripe subscription id
+        user_id = sub.get("metadata", {}).get("user_id")
+        if user_id and status in ("canceled", "unpaid", "past_due"):
+            db.update_subscription(user_id, {
+                "tier": "free",
+                "status": status,
+            })
+            print(f"[stripe] User {user_id} downgraded: {status}")
+
+    return {"ok": True}
+
+
+@app.post("/api/stripe/portal")
+async def stripe_portal(request: Request):
+    """Create a Stripe Customer Portal session for managing subscription."""
+    if not STRIPE_SECRET:
+        raise HTTPException(503, "Betalning ej konfigurerad")
+
+    uid, token = _get_auth(request)
+    sub = db.get_subscription(uid, token)
+    customer_id = sub.get("stripe_customer_id") if sub else None
+    if not customer_id:
+        raise HTTPException(400, "Inget aktivt abonnemang")
+
+    import stripe
+    stripe.api_key = STRIPE_SECRET
+
+    base_url = str(request.base_url).rstrip("/")
+    session = stripe.billing_portal.Session.create(
+        customer=customer_id,
+        return_url=base_url,
+    )
+    return {"url": session.url}
+
+
 # ── Conversation ─────────────────────────────────────────────────
 
 @app.get("/api/conversation")
