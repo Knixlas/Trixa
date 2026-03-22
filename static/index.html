@@ -95,49 +95,86 @@ input:focus { border-color: var(--accent); }
 .header h1 { font-size: 1.5rem; }
 .header .user-name { font-size: 0.85rem; color: var(--text-dim); }
 
-/* ── Status Cards ── */
-.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.8rem; }
-.card {
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  border-radius: 12px; padding: 0.8rem;
+/* ── Status Strip (compact) ── */
+.status-strip {
+  display: flex; gap: 0.5rem; margin-bottom: 0.8rem; overflow-x: auto;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
 }
-.card .label { font-size: 0.7rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.5px; }
-.card .value { font-size: 1.4rem; font-weight: 700; margin: 0.2rem 0; }
-.card .sub { font-size: 0.75rem; opacity: 0.5; }
+.status-strip::-webkit-scrollbar { display: none; }
+.status-chip {
+  background: var(--surface); border-radius: 20px; padding: 0.4rem 0.8rem;
+  font-size: 0.75rem; white-space: nowrap; display: flex; align-items: center; gap: 0.3rem;
+}
+.status-chip .dot { width: 6px; height: 6px; border-radius: 50%; }
+.dot-green { background: #2ecc71; }
+.dot-yellow { background: #f39c12; }
+.dot-red { background: #e74c3c; }
 
 /* ── Tip Box ── */
 .tip-box {
   background: linear-gradient(135deg, var(--accent2), var(--accent));
-  border-radius: 12px; padding: 1rem; margin-bottom: 1rem;
+  border-radius: 12px; padding: 0.8rem 1rem; margin-bottom: 0.8rem;
 }
-.tip-box .tip-label { font-size: 0.7rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
-.tip-box .tip-text { font-size: 0.9rem; margin-top: 0.3rem; line-height: 1.5; }
+.tip-box .tip-label { font-size: 0.65rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
+.tip-box .tip-text { font-size: 0.85rem; margin-top: 0.2rem; line-height: 1.5; }
+
+/* ── Section Card (collapsible on iPhone) ── */
+.section-card {
+  background: var(--surface); border-radius: 12px; margin-bottom: 0.6rem; overflow: hidden;
+}
+.section-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.7rem 1rem; cursor: pointer; user-select: none;
+}
+.section-header h3 { font-size: 0.9rem; margin: 0; display: flex; align-items: center; gap: 0.4rem; }
+.section-header .chevron { font-size: 0.7rem; color: var(--text-dim); transition: transform 0.2s; }
+.section-card.open .chevron { transform: rotate(90deg); }
+.section-body { padding: 0 1rem 0.7rem; display: none; }
+.section-card.open .section-body { display: block; }
+
+/* ── Upcoming Workouts ── */
+.upcoming-day {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.5rem 0; border-bottom: 1px solid #2a2a3a;
+}
+.upcoming-day:last-child { border-bottom: none; }
+.upcoming-day .day-label { font-size: 0.75rem; color: var(--accent); font-weight: 600; width: 28px; }
+.upcoming-day .day-desc { font-size: 0.85rem; flex: 1; }
+.upcoming-day .day-time { font-size: 0.75rem; color: var(--text-dim); }
+
+/* ── Zones Table ── */
+.zones-table { width: 100%; font-size: 0.8rem; }
+.zones-table td { padding: 0.3rem 0.4rem; }
+.zones-table .zone-label { color: var(--text-dim); }
+.zones-table .zone-bar {
+  height: 6px; border-radius: 3px; display: inline-block; vertical-align: middle;
+}
 
 /* ── Strava Activities ── */
-.activities-section { margin-bottom: 1rem; }
-.activities-section h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+.activities-section { margin-bottom: 0.6rem; }
+.activities-section h2 { font-size: 1rem; margin-bottom: 0.4rem; }
 .activity-item {
-  display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.6rem; background: var(--surface); border-radius: 8px;
-  margin-bottom: 0.4rem; font-size: 0.85rem;
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem; background: var(--surface); border-radius: 8px;
+  margin-bottom: 0.3rem; font-size: 0.8rem;
 }
-.activity-icon { font-size: 1.2rem; width: 28px; text-align: center; }
+.activity-icon { font-size: 1.1rem; width: 24px; text-align: center; }
 .activity-details { flex: 1; }
-.activity-details .name { font-weight: 600; }
-.activity-details .stats { color: var(--text-dim); font-size: 0.8rem; }
-.activity-date { color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; }
+.activity-details .name { font-weight: 600; font-size: 0.8rem; }
+.activity-details .stats { color: var(--text-dim); font-size: 0.75rem; }
+.activity-date { color: var(--text-dim); font-size: 0.7rem; white-space: nowrap; }
 .strava-btn {
-  width: 100%; padding: 0.6rem; background: #fc4c02; border: none;
-  border-radius: 8px; color: white; font-size: 0.9rem; font-weight: 600;
-  cursor: pointer; margin-top: 0.5rem;
+  width: 100%; padding: 0.5rem; background: #fc4c02; border: none;
+  border-radius: 8px; color: white; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; margin-top: 0.4rem;
 }
 .strava-btn:hover { opacity: 0.9; }
 .strava-btn.disconnect { background: transparent; border: 1px solid var(--text-dim); color: var(--text-dim); font-weight: 400; }
 
 /* ── Plan ── */
-.plan-section h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
-.plan-content { line-height: 1.7; font-size: 0.9rem; white-space: pre-wrap; }
-.plan-empty { text-align: center; padding: 2rem 1rem; color: var(--text-dim); }
+.plan-section h2 { font-size: 1rem; margin-bottom: 0.4rem; }
+.plan-content { line-height: 1.6; font-size: 0.85rem; white-space: pre-wrap; }
+.plan-empty { text-align: center; padding: 1.5rem 1rem; color: var(--text-dim); font-size: 0.85rem; }
 
 /* ── Chat ── */
 #chat-view { display: none; flex-direction: column; padding-bottom: 0; }
@@ -247,15 +284,43 @@ input:focus { border-color: var(--accent); }
       <h1>Trixa</h1>
       <span class="user-name" id="user-name-display"></span>
     </div>
-    <div class="cards" id="status-cards"></div>
+    <div class="status-strip" id="status-strip"></div>
     <div id="tip-container"></div>
-    <div class="activities-section">
-      <h2>Senaste traning</h2>
-      <div id="strava-activities"></div>
+
+    <!-- Kommande pass -->
+    <div class="section-card open" id="card-upcoming">
+      <div class="section-header" onclick="toggleSection('card-upcoming')">
+        <h3>&#x1F3CB; Kommande pass</h3><span class="chevron">&#x25B6;</span>
+      </div>
+      <div class="section-body" id="upcoming-body">
+        <div class="plan-empty">Be Trixa om en veckoplan!</div>
+      </div>
     </div>
-    <div class="plan-section">
-      <h2>Veckoplan</h2>
-      <div id="plan-content"></div>
+
+    <!-- Zoner -->
+    <div class="section-card" id="card-zones">
+      <div class="section-header" onclick="toggleSection('card-zones')">
+        <h3>&#x1F4CA; Zoner</h3><span class="chevron">&#x25B6;</span>
+      </div>
+      <div class="section-body" id="zones-body">
+        <div style="color:var(--text-dim);font-size:0.85rem">Inga zoner sparade. Be Trixa berakna!</div>
+      </div>
+    </div>
+
+    <!-- Senaste traning -->
+    <div class="section-card open" id="card-activities">
+      <div class="section-header" onclick="toggleSection('card-activities')">
+        <h3>&#x1F3C3; Senaste traning</h3><span class="chevron">&#x25B6;</span>
+      </div>
+      <div class="section-body" id="strava-activities"></div>
+    </div>
+
+    <!-- Veckoplan -->
+    <div class="section-card" id="card-plan">
+      <div class="section-header" onclick="toggleSection('card-plan')">
+        <h3>&#x1F4C5; Veckoplan</h3><span class="chevron">&#x25B6;</span>
+      </div>
+      <div class="section-body" id="plan-content"></div>
     </div>
   </div>
 
@@ -434,30 +499,109 @@ function switchTab(tab) {
   }
 }
 
+// ── Section toggle ──
+function toggleSection(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
 // ── Home ──
 function renderHome() {
   document.getElementById('user-name-display').textContent = user?.name || user?.email || '';
-  const tierLabel = user?.trial_days > 0 ? `Trial (${user.trial_days}d)` : (user?.tier === 'premium' ? 'Premium' : 'Gratis');
-  document.getElementById('status-cards').innerHTML = `
-    <div class="card"><div class="label">Medlemskap</div><div class="value">${tierLabel}</div></div>
-    <div class="card"><div class="label">Meddelanden</div><div class="value">${user?.tier === 'premium' ? '&infin;' : '5/dag'}</div></div>`;
 
+  // Status strip
+  const tierLabel = user?.trial_days > 0 ? `Trial ${user.trial_days}d` : (user?.tier === 'premium' ? 'Premium' : 'Gratis');
+  const stravaLabel = stravaData.connected ? 'Strava' : 'Strava ej kopplad';
+  const stravaDot = stravaData.connected ? 'dot-green' : 'dot-red';
+  document.getElementById('status-strip').innerHTML = `
+    <div class="status-chip"><span class="dot dot-green"></span>${tierLabel}</div>
+    <div class="status-chip"><span class="dot ${stravaDot}"></span>${stravaLabel}</div>
+    <div class="status-chip">${stravaData.activities.length} pass / 14d</div>`;
+
+  // Tip box — Trixa says
   const lastMsg = [...chatHistory].reverse().find(m => m.role === 'assistant');
   const tip = document.getElementById('tip-container');
   if (lastMsg) {
     const ps = lastMsg.content.split('\n\n').filter(p => p.trim());
     const t = (ps[ps.length-1] || '').substring(0, 200);
-    tip.innerHTML = `<div class="tip-box"><div class="tip-label">Trixa sager</div><div class="tip-text">${esc(t)}</div></div>`;
-  } else { tip.innerHTML = ''; }
+    tip.innerHTML = `<div class="tip-box"><div class="tip-label">Tank pa</div><div class="tip-text">${esc(t)}</div></div>`;
+  } else {
+    tip.innerHTML = `<div class="tip-box"><div class="tip-label">Tank pa</div><div class="tip-text">Fraga Trixa i chatten for att fa personlig coaching!</div></div>`;
+  }
 
+  // Upcoming 3 days
+  renderUpcoming();
+
+  // Zones
+  renderZones();
+
+  // Plan
   const planMsg = [...chatHistory].reverse().find(m =>
     m.role === 'assistant' && ['VECKOPLAN','MAN ','Mandag','**Man'].some(k => m.content?.includes(k))
   );
   document.getElementById('plan-content').innerHTML = planMsg
     ? `<div class="plan-content">${md(planMsg.content)}</div>`
-    : `<div class="plan-empty">Ingen veckoplan annu. Ga till Chatt och be Trixa om en!</div>`;
+    : `<div class="plan-empty">Be Trixa om en veckoplan i chatten!</div>`;
 
   renderStravaActivities();
+}
+
+function renderUpcoming() {
+  const el = document.getElementById('upcoming-body');
+  const DAYS_SV = ['Son','Man','Tis','Ons','Tor','Fre','Lor'];
+  const planMsg = [...chatHistory].reverse().find(m =>
+    m.role === 'assistant' && ['VECKOPLAN','MAN ','Mandag','**Man'].some(k => m.content?.includes(k))
+  );
+  if (!planMsg) {
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem;padding:0.3rem 0">Be Trixa om en veckoplan!</div>';
+    return;
+  }
+  // Parse next 3 days from plan
+  const today = new Date();
+  let html = '';
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    const dayName = DAYS_SV[d.getDay()];
+    const dateStr = `${d.getDate()}/${d.getMonth()+1}`;
+    const label = i === 0 ? 'Idag' : i === 1 ? 'Imorgon' : dayName;
+    // Try to find this day in the plan text
+    const patterns = ['Mandag','Tisdag','Onsdag','Torsdag','Fredag','Lordag','Sondag',
+                      'Man ','Tis ','Ons ','Tor ','Fre ','Lor ','Son '];
+    const fullDays = ['Sondag','Mandag','Tisdag','Onsdag','Torsdag','Fredag','Lordag'];
+    const searchDay = fullDays[d.getDay()];
+    const lines = planMsg.content.split('\n');
+    let dayLine = '';
+    for (let j = 0; j < lines.length; j++) {
+      if (lines[j].toLowerCase().includes(searchDay.toLowerCase())) {
+        dayLine = lines[j].replace(/\*\*/g,'').replace(/^[-*#]+\s*/, '').trim();
+        // Also grab next line if it looks like details
+        if (j+1 < lines.length && lines[j+1].trim().startsWith('-')) {
+          dayLine += ' ' + lines[j+1].replace(/^[-*]\s*/, '').trim();
+        }
+        break;
+      }
+    }
+    html += `<div class="upcoming-day">
+      <div class="day-label">${label}</div>
+      <div class="day-desc">${dayLine ? esc(dayLine.substring(0, 80)) : '<span style="color:var(--text-dim)">Vila?</span>'}</div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderZones() {
+  const el = document.getElementById('zones-body');
+  // Look for zones in chat history
+  const zonesMsg = [...chatHistory].reverse().find(m =>
+    m.role === 'assistant' && (m.content?.includes('Z1') || m.content?.includes('Zon 1') || m.content?.includes('FTP'))
+  );
+  if (!zonesMsg) {
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem;padding:0.3rem 0">Fraga Trixa: "Berakna mina zoner"</div>';
+    return;
+  }
+  // Show the zones message as formatted text
+  const relevant = zonesMsg.content.substring(0, 500);
+  el.innerHTML = `<div style="font-size:0.8rem;line-height:1.5">${md(relevant)}</div>`;
 }
 
 // ── Chat ──
