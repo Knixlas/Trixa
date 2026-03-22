@@ -364,6 +364,15 @@ async def clear_conversation(request: Request):
 
 # ── Strava ───────────────────────────────────────────────────────
 
+@app.get("/api/strava/status")
+async def strava_debug():
+    """Temporary debug endpoint — remove after verification."""
+    cid = os.environ.get("STRAVA_CLIENT_ID", "<NOT SET>")
+    has_secret = bool(os.environ.get("STRAVA_CLIENT_SECRET"))
+    has_state = bool(os.environ.get("STRAVA_STATE_SECRET"))
+    return {"client_id": cid, "has_secret": has_secret, "has_state": has_state}
+
+
 @app.get("/api/strava/connect")
 async def strava_connect(request: Request):
     uid, _ = _get_auth(request)
