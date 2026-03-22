@@ -582,6 +582,11 @@ function renderStravaActivities() {
 async function connectStrava() {
   try {
     const r = await fetch('/api/strava/connect', {headers: hdrs()});
+    if (!r.ok) {
+      const text = await r.text();
+      alert('Fel: ' + text);
+      return;
+    }
     const data = await r.json();
     if (data.url) window.location.href = data.url;
   } catch (e) { alert('Kunde inte koppla Strava: ' + e.message); }
