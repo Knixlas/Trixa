@@ -158,20 +158,37 @@ input:focus { border-color: var(--accent); }
 .chat-input-bar {
   padding: 0.5rem 1rem calc(var(--nav-h) + var(--safe-bottom) + 0.5rem);
   background: var(--bg); border-top: 1px solid #2a2a3a;
-  display: flex; gap: 0.5rem;
+  display: flex; flex-direction: column; gap: 0.5rem;
 }
-.chat-input-bar input {
+.chat-input-row { display: flex; gap: 0.5rem; }
+.chat-input-row input {
   flex: 1; padding: 0.7rem 1rem; background: var(--surface);
   border: 1px solid #2a2a3a; border-radius: 20px;
   color: var(--text); font-size: 0.95rem; outline: none;
 }
-.chat-input-bar button {
+.chat-input-row button {
   width: 40px; height: 40px; border-radius: 50%;
   background: var(--accent); border: none; color: white;
   font-size: 1.2rem; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
 }
-.chat-input-bar button:disabled { opacity: 0.4; }
+.chat-input-row button:disabled { opacity: 0.4; }
+.img-btn { background: var(--surface2) !important; border: 1px solid #2a2a3a !important; font-size: 1rem !important; }
+.img-preview-bar {
+  display: flex; gap: 0.5rem; flex-wrap: wrap;
+}
+.img-preview-bar .img-thumb {
+  position: relative; width: 60px; height: 60px; border-radius: 8px; overflow: hidden;
+}
+.img-preview-bar .img-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.img-preview-bar .img-thumb .remove-img {
+  position: absolute; top: -4px; right: -4px; width: 20px; height: 20px;
+  background: var(--danger); border: none; border-radius: 50%;
+  color: white; font-size: 0.7rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.msg img.chat-image { max-width: 100%; border-radius: 8px; margin-top: 0.5rem; }
 
 /* ── Profile ── */
 .profile-section {
@@ -246,8 +263,13 @@ input:focus { border-color: var(--accent); }
   <div id="chat-view" class="view">
     <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-bar">
-      <input type="text" id="chat-input" placeholder="Skriv till Trixa..." onkeydown="if(event.key==='Enter')sendMessage()">
-      <button onclick="sendMessage()" id="send-btn">&#x2191;</button>
+      <div class="img-preview-bar" id="img-preview-bar"></div>
+      <div class="chat-input-row">
+        <button class="img-btn" onclick="document.getElementById('img-input').click()" title="Bifoga bild">&#x1F4F7;</button>
+        <input type="text" id="chat-input" placeholder="Skriv till Trixa..." onkeydown="if(event.key==='Enter')sendMessage()">
+        <button onclick="sendMessage()" id="send-btn">&#x2191;</button>
+      </div>
+      <input type="file" id="img-input" accept="image/*" multiple style="display:none" onchange="handleImageSelect(event)">
     </div>
   </div>
 
@@ -300,6 +322,7 @@ input:focus { border-color: var(--accent); }
 <script>
 let user = JSON.parse(localStorage.getItem('trixa_user') || 'null');
 let chatHistory = [];
+let pendingImages = []; // [{base64, dataUrl, mediaType}]
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -448,11 +471,11 @@ function renderChat() {
   c.scrollTop = c.scrollHeight;
 }
 
-function appendMsg(role, text, workout) {
+function appendMsg(role, text, workout, rawHtml) {
   const c = document.getElementById('chat-messages');
   const div = document.createElement('div');
   div.className = `msg ${role}`;
-  let html = md(text);
+  let html = rawHtml || md(text);
   if (workout) {
     html += `<div class="workout-btns"><button onclick='pushWorkout(${JSON.stringify(workout).replace(/'/g,"&#39;")})'>Push till Intervals.icu</button></div>`;
   }
@@ -461,15 +484,54 @@ function appendMsg(role, text, workout) {
   c.scrollTop = c.scrollHeight;
 }
 
+function handleImageSelect(e) {
+  const files = Array.from(e.target.files);
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    if (pendingImages.length >= 4) { alert('Max 4 bilder'); break; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      const base64 = dataUrl.split(',')[1];
+      const mediaType = file.type;
+      pendingImages.push({base64, dataUrl, mediaType});
+      renderImagePreviews();
+    };
+    reader.readAsDataURL(file);
+  }
+  e.target.value = '';
+}
+
+function removeImage(idx) {
+  pendingImages.splice(idx, 1);
+  renderImagePreviews();
+}
+
+function renderImagePreviews() {
+  const bar = document.getElementById('img-preview-bar');
+  if (!pendingImages.length) { bar.innerHTML = ''; return; }
+  bar.innerHTML = pendingImages.map((img, i) =>
+    `<div class="img-thumb"><img src="${img.dataUrl}"><button class="remove-img" onclick="removeImage(${i})">x</button></div>`
+  ).join('');
+}
+
 async function sendMessage() {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
-  if (!text) return;
+  const images = [...pendingImages];
+  if (!text && !images.length) return;
   input.value = '';
+  pendingImages = [];
+  renderImagePreviews();
   document.getElementById('send-btn').disabled = true;
 
-  chatHistory.push({role: 'user', content: text});
-  appendMsg('user', text);
+  // Build display content
+  let displayHtml = text ? esc(text) : '';
+  if (images.length) {
+    displayHtml += images.map(img => `<img class="chat-image" src="${img.dataUrl}">`).join('');
+  }
+  chatHistory.push({role: 'user', content: text || '(bild)', _images: images.length > 0 ? images : undefined});
+  appendMsg('user', null, null, displayHtml);
 
   const typing = document.createElement('div');
   typing.className = 'msg assistant';
@@ -478,9 +540,13 @@ async function sendMessage() {
   document.getElementById('chat-messages').appendChild(typing);
 
   try {
+    const body = {message: text || '', history: chatHistory.slice(0, -1)};
+    if (images.length) {
+      body.images = images.map(img => ({base64: img.base64, media_type: img.mediaType}));
+    }
     const r = await fetch('/api/chat', {
       method: 'POST', headers: hdrs(),
-      body: JSON.stringify({message: text, history: chatHistory.slice(0, -1)}),
+      body: JSON.stringify(body),
     });
     typing.remove();
 

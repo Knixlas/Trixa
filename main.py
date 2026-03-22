@@ -42,9 +42,14 @@ class AuthRequest(BaseModel):
     password: str
     name: str | None = None
 
+class ImageData(BaseModel):
+    base64: str
+    media_type: str = "image/jpeg"
+
 class ChatRequest(BaseModel):
-    message: str
+    message: str = ""
     history: list[dict] = []
+    images: list[ImageData] = []
 
 class IntervalsPushRequest(BaseModel):
     workout: dict
@@ -250,9 +255,28 @@ async def chat(req: ChatRequest, request: Request):
         activities = None
     system_prompt = _build_system_prompt(profile, activities)
 
-    # Prepare messages
-    clean = [{"role": m["role"], "content": m["content"]} for m in req.history[-MAX_HISTORY:]]
-    clean.append({"role": "user", "content": req.message})
+    # Prepare messages (strip _images from history to avoid sending base64 twice)
+    clean = []
+    for m in req.history[-MAX_HISTORY:]:
+        clean.append({"role": m["role"], "content": m.get("content", "")})
+
+    # Build user message — multimodal if images attached
+    if req.images:
+        content_blocks = []
+        for img in req.images[:4]:
+            content_blocks.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": img.media_type,
+                    "data": img.base64,
+                },
+            })
+        if req.message:
+            content_blocks.append({"type": "text", "text": req.message})
+        clean.append({"role": "user", "content": content_blocks})
+    else:
+        clean.append({"role": "user", "content": req.message})
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
     tools = [WORKOUT_TOOL] if can_use_feature(tier, "workout_export") else None
