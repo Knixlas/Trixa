@@ -595,12 +595,16 @@ async function connectStrava() {
 async function syncStrava() {
   try {
     const r = await fetch('/api/strava/sync', {method: 'POST', headers: hdrs()});
+    if (!r.ok) {
+      const text = await r.text();
+      try { const j = JSON.parse(text); alert('Sync: ' + (j.detail || text)); }
+      catch { alert('Sync fel: ' + text); }
+      return;
+    }
     const data = await r.json();
-    if (r.ok) {
-      alert(`Synkat ${data.synced} aktiviteter!`);
-      await fetchStrava();
-      renderStravaActivities();
-    } else { alert('Sync misslyckades: ' + (data.detail || '?')); }
+    alert(`Synkat ${data.synced} aktiviteter!`);
+    await fetchStrava();
+    renderStravaActivities();
   } catch (e) { alert('Fel: ' + e.message); }
 }
 

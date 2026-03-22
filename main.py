@@ -427,19 +427,23 @@ async def strava_sync(request: Request):
         raise HTTPException(400, "Strava ej kopplat")
 
     from integrations.strava import ensure_fresh_token, get_activities, parse_activity
+    import time, traceback
 
-    # Refresh tokens if needed
-    strava_tokens = ensure_fresh_token(strava_tokens)
-    if strava_tokens.get("_refreshed"):
-        db.update_strava_tokens(uid, strava_tokens)
+    try:
+        # Refresh tokens if needed
+        strava_tokens = ensure_fresh_token(strava_tokens)
+        if strava_tokens.get("_refreshed"):
+            db.update_strava_tokens(uid, strava_tokens)
 
-    # Fetch last 30 days
-    import time
-    after = int(time.time()) - 30 * 86400
-    raw = get_activities(strava_tokens["access_token"], after=after)
-    parsed = [parse_activity(a) for a in raw]
-    count = db.upsert_strava_activities(uid, parsed)
-    return {"synced": count}
+        # Fetch last 30 days
+        after = int(time.time()) - 30 * 86400
+        raw = get_activities(strava_tokens["access_token"], after=after)
+        parsed = [parse_activity(a) for a in raw]
+        count = db.upsert_strava_activities(uid, parsed)
+        return {"synced": count}
+    except Exception as e:
+        print(f"Strava sync error: {traceback.format_exc()}")
+        raise HTTPException(500, f"Sync misslyckades: {str(e)}")
 
 
 @app.get("/api/strava/activities")
