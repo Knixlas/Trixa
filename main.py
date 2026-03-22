@@ -400,7 +400,6 @@ async def create_checkout(request: Request):
             success_url=f"{base_url}/?payment=success",
             cancel_url=f"{base_url}/?payment=cancel",
             client_reference_id=uid,
-            subscription_data={"trial_period_days": 0},
             metadata={"user_id": uid, "plan": plan},
         )
         return {"url": session.url}
