@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Trixa</title>
+<style>
+:root {
+  --bg: #0f0f13;
+  --surface: #1a1a24;
+  --surface2: #22222e;
+  --accent: #14919b;
+  --accent2: #0d7377;
+  --text: #e8e8ed;
+  --text-dim: #8888a0;
+  --danger: #e74c3c;
+  --nav-h: 60px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg); color: var(--text);
+  height: 100dvh; overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ── */
+#app { display: flex; flex-direction: column; height: 100dvh; }
+.view {
+  flex: 1; overflow-y: auto;
+  padding: 1rem 1rem calc(var(--nav-h) + var(--safe-bottom) + 0.5rem);
+  display: none;
+}
+.view.active { display: block; }
+
+/* ── Bottom Nav ── */
+nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: calc(var(--nav-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: var(--surface); border-top: 1px solid #2a2a3a;
+  display: flex; z-index: 100;
+}
+nav button {
+  flex: 1; background: none; border: none; color: var(--text-dim);
+  font-size: 0.7rem; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px;
+  cursor: pointer; transition: color 0.2s;
+}
+nav button.active { color: var(--accent); }
+nav button svg { width: 22px; height: 22px; }
+
+/* ── Auth ── */
+#auth-view {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; height: 100dvh; padding: 2rem;
+}
+#auth-view h1 { font-size: 2.5rem; margin-bottom: 0.3rem; }
+#auth-view .subtitle { color: var(--text-dim); margin-bottom: 2rem; }
+.auth-form { width: 100%; max-width: 340px; }
+.auth-tabs { display: flex; margin-bottom: 1.5rem; }
+.auth-tabs button {
+  flex: 1; padding: 0.7rem; background: var(--surface);
+  border: 1px solid #2a2a3a; color: var(--text-dim); cursor: pointer;
+  font-size: 0.9rem; transition: all 0.2s;
+}
+.auth-tabs button:first-child { border-radius: 8px 0 0 8px; }
+.auth-tabs button:last-child { border-radius: 0 8px 8px 0; }
+.auth-tabs button.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+input[type="text"], input[type="email"], input[type="password"] {
+  width: 100%; padding: 0.8rem 1rem; background: var(--surface);
+  border: 1px solid #2a2a3a; border-radius: 8px; color: var(--text);
+  font-size: 1rem; margin-bottom: 0.8rem; outline: none;
+}
+input:focus { border-color: var(--accent); }
+
+.btn {
+  width: 100%; padding: 0.8rem; background: var(--accent);
+  border: none; border-radius: 8px; color: white; font-size: 1rem;
+  cursor: pointer; font-weight: 600;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary { background: var(--surface2); border: 1px solid #2a2a3a; }
+.btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+.btn-sm { padding: 0.5rem 1rem; font-size: 0.85rem; width: auto; }
+.error-msg { color: var(--danger); font-size: 0.85rem; margin-bottom: 0.5rem; text-align: center; }
+.success-msg { color: #2ecc71; font-size: 0.85rem; margin-bottom: 0.5rem; text-align: center; }
+
+/* ── Header ── */
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.header h1 { font-size: 1.5rem; }
+.header .user-name { font-size: 0.85rem; color: var(--text-dim); }
+
+/* ── Status Cards ── */
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.8rem; }
+.card {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border-radius: 12px; padding: 0.8rem;
+}
+.card .label { font-size: 0.7rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.5px; }
+.card .value { font-size: 1.4rem; font-weight: 700; margin: 0.2rem 0; }
+.card .sub { font-size: 0.75rem; opacity: 0.5; }
+
+/* ── Tip Box ── */
+.tip-box {
+  background: linear-gradient(135deg, var(--accent2), var(--accent));
+  border-radius: 12px; padding: 1rem; margin-bottom: 1rem;
+}
+.tip-box .tip-label { font-size: 0.7rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
+.tip-box .tip-text { font-size: 0.9rem; margin-top: 0.3rem; line-height: 1.5; }
+
+/* ── Plan ── */
+.plan-section h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+.plan-content { line-height: 1.7; font-size: 0.9rem; white-space: pre-wrap; }
+.plan-empty { text-align: center; padding: 2rem 1rem; color: var(--text-dim); }
+
+/* ── Chat ── */
+#chat-view { display: none; flex-direction: column; padding-bottom: 0; }
+#chat-view.active { display: flex; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 1rem 1rem 0.5rem; }
+.msg {
+  max-width: 85%; margin-bottom: 0.8rem; padding: 0.7rem 1rem;
+  border-radius: 16px; font-size: 0.9rem; line-height: 1.6; word-wrap: break-word;
+}
+.msg.user { background: var(--accent); margin-left: auto; border-bottom-right-radius: 4px; }
+.msg.assistant { background: var(--surface2); border-bottom-left-radius: 4px; }
+.msg .workout-btns { margin-top: 0.5rem; display: flex; gap: 0.5rem; }
+.msg .workout-btns button {
+  padding: 0.4rem 0.8rem; font-size: 0.8rem;
+  background: var(--accent2); border: none; border-radius: 6px;
+  color: white; cursor: pointer;
+}
+.chat-input-bar {
+  padding: 0.5rem 1rem calc(var(--nav-h) + var(--safe-bottom) + 0.5rem);
+  background: var(--bg); border-top: 1px solid #2a2a3a;
+  display: flex; gap: 0.5rem;
+}
+.chat-input-bar input {
+  flex: 1; padding: 0.7rem 1rem; background: var(--surface);
+  border: 1px solid #2a2a3a; border-radius: 20px;
+  color: var(--text); font-size: 0.95rem; outline: none;
+}
+.chat-input-bar button {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--accent); border: none; color: white;
+  font-size: 1.2rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.chat-input-bar button:disabled { opacity: 0.4; }
+
+/* ── Profile ── */
+.profile-section {
+  background: var(--surface); border-radius: 12px;
+  padding: 1rem; margin-bottom: 0.8rem;
+}
+.profile-section h3 { font-size: 0.95rem; margin-bottom: 0.7rem; opacity: 0.8; }
+.profile-row { display: flex; justify-content: space-between; margin-bottom: 0.4rem; font-size: 0.9rem; }
+.profile-row .label { color: var(--text-dim); }
+.profile-input { margin-bottom: 0.6rem; }
+.profile-input label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.3rem; }
+.profile-input input { font-size: 0.9rem; padding: 0.6rem 0.8rem; }
+
+/* ── Desktop ── */
+@media (min-width: 769px) {
+  .view, #chat-view .chat-messages, .chat-input-bar {
+    max-width: 600px; margin-left: auto; margin-right: auto;
+  }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- AUTH -->
+<div id="auth-view">
+  <h1>Trixa</h1>
+  <p class="subtitle">Din personliga AI-tranare</p>
+  <div class="auth-form">
+    <div class="auth-tabs">
+      <button class="active" onclick="showAuthTab('login')">Logga in</button>
+      <button onclick="showAuthTab('signup')">Skapa konto</button>
+    </div>
+    <div id="auth-error" class="error-msg" style="display:none"></div>
+    <div id="auth-success" class="success-msg" style="display:none"></div>
+    <div id="login-fields">
+      <input type="email" id="login-email" placeholder="E-post">
+      <input type="password" id="login-pw" placeholder="Losenord">
+      <button class="btn" id="login-btn" onclick="doLogin()">Logga in</button>
+    </div>
+    <div id="signup-fields" style="display:none">
+      <input type="text" id="signup-name" placeholder="Ditt namn">
+      <input type="email" id="signup-email" placeholder="E-post">
+      <input type="password" id="signup-pw" placeholder="Losenord (minst 6 tecken)">
+      <button class="btn" id="signup-btn" onclick="doSignup()">Skapa konto</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="main-app" style="display:none">
+
+  <!-- HEM -->
+  <div id="home-view" class="view active">
+    <div class="header">
+      <h1>Trixa</h1>
+      <span class="user-name" id="user-name-display"></span>
+    </div>
+    <div class="cards" id="status-cards"></div>
+    <div id="tip-container"></div>
+    <div class="plan-section">
+      <h2>Veckoplan</h2>
+      <div id="plan-content"></div>
+    </div>
+  </div>
+
+  <!-- CHATT -->
+  <div id="chat-view" class="view">
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-bar">
+      <input type="text" id="chat-input" placeholder="Skriv till Trixa..." onkeydown="if(event.key==='Enter')sendMessage()">
+      <button onclick="sendMessage()" id="send-btn">&#x2191;</button>
+    </div>
+  </div>
+
+  <!-- PROFIL -->
+  <div id="profile-view" class="view">
+    <div class="header"><h1>Profil</h1></div>
+    <div class="profile-section" id="profile-info"></div>
+    <div class="profile-section">
+      <h3>Intervals.icu</h3>
+      <div class="profile-input">
+        <label>API-nyckel</label>
+        <input type="password" id="icu-key">
+      </div>
+      <div class="profile-input">
+        <label>Athlete ID</label>
+        <input type="text" id="icu-athlete" placeholder="t.ex. i12345">
+      </div>
+      <button class="btn btn-sm" onclick="saveIntervals()">Spara</button>
+    </div>
+    <div class="profile-section" id="membership-section"></div>
+    <div style="margin-top:1rem;display:flex;gap:0.5rem">
+      <button class="btn btn-secondary btn-sm" onclick="newConversation()" style="flex:1">Ny konversation</button>
+      <button class="btn btn-danger btn-sm" onclick="doLogout()" style="flex:1">Logga ut</button>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <nav>
+    <button class="active" onclick="switchTab('home')" id="nav-home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10"/></svg>
+      Hem
+    </button>
+    <button onclick="switchTab('chat')" id="nav-chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      Chatt
+    </button>
+    <button onclick="switchTab('profile')" id="nav-profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0113 0"/></svg>
+      Profil
+    </button>
+  </nav>
+</div>
+</div>
+
+<script>
+let user = JSON.parse(localStorage.getItem('trixa_user') || 'null');
+let chatHistory = [];
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function md(text) {
+  if (!text) return '';
+  return esc(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^### (.+)$/gm, '<h3 style="font-size:1rem;margin:0.5rem 0 0.3rem">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 style="font-size:1.1rem;margin:0.5rem 0 0.3rem">$1</h2>')
+    .replace(/^[-*] (.+)$/gm, '&bull; $1<br>')
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+}
+
+function hdrs() {
+  return {
+    'Authorization': 'Bearer ' + (user?.access_token || ''),
+    'X-User-Id': user?.user_id || '',
+    'X-User-Email': user?.email || '',
+    'Content-Type': 'application/json',
+  };
+}
+
+// ── Auth ──
+function showAuthTab(tab) {
+  document.querySelectorAll('.auth-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('auth-error').style.display = 'none';
+  document.getElementById('auth-success').style.display = 'none';
+  if (tab === 'login') {
+    document.querySelectorAll('.auth-tabs button')[0].classList.add('active');
+    document.getElementById('login-fields').style.display = 'block';
+    document.getElementById('signup-fields').style.display = 'none';
+  } else {
+    document.querySelectorAll('.auth-tabs button')[1].classList.add('active');
+    document.getElementById('login-fields').style.display = 'none';
+    document.getElementById('signup-fields').style.display = 'block';
+  }
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const pw = document.getElementById('login-pw').value;
+  if (!email || !pw) return;
+  document.getElementById('login-btn').disabled = true;
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password: pw}),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || 'Login failed');
+    user = data;
+    localStorage.setItem('trixa_user', JSON.stringify(user));
+    showApp();
+  } catch (e) {
+    document.getElementById('auth-error').textContent = e.message;
+    document.getElementById('auth-error').style.display = 'block';
+  }
+  document.getElementById('login-btn').disabled = false;
+}
+
+async function doSignup() {
+  const name = document.getElementById('signup-name').value;
+  const email = document.getElementById('signup-email').value;
+  const pw = document.getElementById('signup-pw').value;
+  if (!name || !email || !pw) return;
+  if (pw.length < 6) {
+    document.getElementById('auth-error').textContent = 'Losenordet maste vara minst 6 tecken';
+    document.getElementById('auth-error').style.display = 'block';
+    return;
+  }
+  document.getElementById('signup-btn').disabled = true;
+  try {
+    const r = await fetch('/api/auth/signup', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password: pw, name}),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || 'Signup failed');
+    document.getElementById('auth-success').textContent = data.message;
+    document.getElementById('auth-success').style.display = 'block';
+    showAuthTab('login');
+  } catch (e) {
+    document.getElementById('auth-error').textContent = e.message;
+    document.getElementById('auth-error').style.display = 'block';
+  }
+  document.getElementById('signup-btn').disabled = false;
+}
+
+function doLogout() {
+  localStorage.removeItem('trixa_user');
+  user = null; chatHistory = [];
+  location.reload();
+}
+
+// ── Navigation ──
+function switchTab(tab) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  const views = {home:'home-view', chat:'chat-view', profile:'profile-view'};
+  const navs = {home:'nav-home', chat:'nav-chat', profile:'nav-profile'};
+  document.getElementById(views[tab]).classList.add('active');
+  document.getElementById(navs[tab]).classList.add('active');
+  if (tab === 'chat') {
+    const c = document.getElementById('chat-messages');
+    setTimeout(() => { c.scrollTop = c.scrollHeight; }, 50);
+    document.getElementById('chat-input').focus();
+  }
+}
+
+// ── Home ──
+function renderHome() {
+  document.getElementById('user-name-display').textContent = user?.name || user?.email || '';
+  const tierLabel = user?.trial_days > 0 ? `Trial (${user.trial_days}d)` : (user?.tier === 'premium' ? 'Premium' : 'Gratis');
+  document.getElementById('status-cards').innerHTML = `
+    <div class="card"><div class="label">Medlemskap</div><div class="value">${tierLabel}</div></div>
+    <div class="card"><div class="label">Meddelanden</div><div class="value">${user?.tier === 'premium' ? '&infin;' : '5/dag'}</div></div>`;
+
+  const lastMsg = [...chatHistory].reverse().find(m => m.role === 'assistant');
+  const tip = document.getElementById('tip-container');
+  if (lastMsg) {
+    const ps = lastMsg.content.split('\n\n').filter(p => p.trim());
+    const t = (ps[ps.length-1] || '').substring(0, 200);
+    tip.innerHTML = `<div class="tip-box"><div class="tip-label">Trixa sager</div><div class="tip-text">${esc(t)}</div></div>`;
+  } else { tip.innerHTML = ''; }
+
+  const planMsg = [...chatHistory].reverse().find(m =>
+    m.role === 'assistant' && ['VECKOPLAN','MAN ','Mandag','**Man'].some(k => m.content?.includes(k))
+  );
+  document.getElementById('plan-content').innerHTML = planMsg
+    ? `<div class="plan-content">${md(planMsg.content)}</div>`
+    : `<div class="plan-empty">Ingen veckoplan annu. Ga till Chatt och be Trixa om en!</div>`;
+}
+
+// ── Chat ──
+function renderChat() {
+  const c = document.getElementById('chat-messages');
+  c.innerHTML = '';
+  for (const msg of chatHistory) {
+    if (msg._auto) continue;
+    appendMsg(msg.role, msg.content, msg.workout);
+  }
+  c.scrollTop = c.scrollHeight;
+}
+
+function appendMsg(role, text, workout) {
+  const c = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  let html = md(text);
+  if (workout) {
+    html += `<div class="workout-btns"><button onclick='pushWorkout(${JSON.stringify(workout).replace(/'/g,"&#39;")})'>Push till Intervals.icu</button></div>`;
+  }
+  div.innerHTML = html;
+  c.appendChild(div);
+  c.scrollTop = c.scrollHeight;
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  document.getElementById('send-btn').disabled = true;
+
+  chatHistory.push({role: 'user', content: text});
+  appendMsg('user', text);
+
+  const typing = document.createElement('div');
+  typing.className = 'msg assistant';
+  typing.style.opacity = '0.5';
+  typing.textContent = 'Trixa tanker...';
+  document.getElementById('chat-messages').appendChild(typing);
+
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({message: text, history: chatHistory.slice(0, -1)}),
+    });
+    typing.remove();
+
+    if (!r.ok) {
+      const err = await r.json();
+      appendMsg('assistant', 'Fel: ' + (err.detail || 'Nagot gick fel'));
+      document.getElementById('send-btn').disabled = false;
+      return;
+    }
+
+    const ct = r.headers.get('content-type') || '';
+    if (ct.includes('text/event-stream')) {
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let full = '';
+      const div = document.createElement('div');
+      div.className = 'msg assistant';
+      document.getElementById('chat-messages').appendChild(div);
+      let buf = '';
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, {stream: true});
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const d = JSON.parse(line.slice(6));
+            if (d.text) { full += d.text; div.innerHTML = md(full); }
+          } catch {}
+        }
+        document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
+      }
+      chatHistory.push({role: 'assistant', content: full});
+    } else {
+      const data = await r.json();
+      chatHistory.push({role: 'assistant', content: data.text, workout: data.workout});
+      appendMsg('assistant', data.text, data.workout);
+    }
+    renderHome();
+  } catch (e) {
+    typing.remove();
+    appendMsg('assistant', 'Anslutningsfel. Forsok igen.');
+  }
+  document.getElementById('send-btn').disabled = false;
+}
+
+async function pushWorkout(w) {
+  try {
+    const r = await fetch('/api/intervals/push', {method:'POST', headers:hdrs(), body:JSON.stringify({workout:w})});
+    alert(r.ok ? 'Pushat till Intervals.icu!' : 'Fel: ' + ((await r.json()).detail || '?'));
+  } catch { alert('Anslutningsfel'); }
+}
+
+// ── Profile ──
+async function renderProfile() {
+  document.getElementById('profile-info').innerHTML = `<h3>Konto</h3>
+    <div class="profile-row"><span class="label">Namn</span><span>${esc(user?.name||'')}</span></div>
+    <div class="profile-row"><span class="label">E-post</span><span>${esc(user?.email||'')}</span></div>`;
+  const tl = user?.trial_days > 0 ? `Trial (${user.trial_days}d kvar)` : (user?.tier === 'premium' ? 'Premium' : 'Gratis');
+  document.getElementById('membership-section').innerHTML = `<h3>Medlemskap</h3>
+    <div class="profile-row"><span class="label">Niva</span><span>${tl}</span></div>`;
+  try {
+    const r = await fetch('/api/profile', {headers: hdrs()});
+    const d = await r.json();
+    if (d.profile) {
+      document.getElementById('icu-key').value = d.profile.intervals_api_key || '';
+      document.getElementById('icu-athlete').value = d.profile.intervals_athlete_id || '';
+    }
+  } catch {}
+}
+
+async function saveIntervals() {
+  const k = document.getElementById('icu-key').value;
+  const a = document.getElementById('icu-athlete').value;
+  if (!k || !a) { alert('Fyll i bade API-nyckel och Athlete ID'); return; }
+  try {
+    const r = await fetch('/api/intervals/save', {method:'POST', headers:hdrs(), body:JSON.stringify({api_key:k, athlete_id:a})});
+    alert(r.ok ? 'Sparat!' : 'Kunde inte spara');
+  } catch (e) { alert('Fel: ' + e.message); }
+}
+
+async function newConversation() {
+  try { await fetch('/api/conversation', {method:'DELETE', headers:hdrs()}); } catch {}
+  chatHistory = [];
+  renderChat(); renderHome();
+  switchTab('chat');
+}
+
+// ── Init ──
+async function showApp() {
+  document.getElementById('auth-view').style.display = 'none';
+  const main = document.getElementById('main-app');
+  main.style.display = 'flex';
+  main.style.flexDirection = 'column';
+  main.style.height = '100dvh';
+  try {
+    const r = await fetch('/api/conversation', {headers: hdrs()});
+    const d = await r.json();
+    chatHistory = d.messages || [];
+  } catch { chatHistory = []; }
+  renderHome(); renderChat(); renderProfile();
+}
+
+if (user) showApp();
+else document.getElementById('auth-view').style.display = 'flex';
+</script>
+</body>
+</html>

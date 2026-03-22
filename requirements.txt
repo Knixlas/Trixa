@@ -1,0 +1,7 @@
+anthropic
+fastapi
+gunicorn
+python-dotenv
+requests
+supabase
+uvicorn[standard]
