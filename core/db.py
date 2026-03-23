@@ -73,24 +73,34 @@ def update_profile(user_id: str, access_token: str, data: dict) -> dict:
 
 
 def profile_to_dict(profile: dict) -> dict:
-    """Convert Supabase profile row to a flat dict for system prompt."""
-    return {
-        "name": profile.get("name", ""),
-        "experience_level": profile.get("experience_level", "unknown"),
-        "goal": profile.get("goal", ""),
-        "weight_kg": float(profile["weight_kg"]) if profile.get("weight_kg") else None,
-        "ftp_watts": profile.get("ftp_watts"),
-        "at_pace": profile.get("at_pace"),
-        "lt_pace": profile.get("lt_pace"),
-        "at_hr": profile.get("at_hr"),
-        "lt_hr": profile.get("lt_hr"),
-        "css": profile.get("css"),
-        "ironman_finishes": profile.get("ironman_finishes", 0),
-        "next_race_name": profile.get("next_race_name", ""),
-        "next_race_date": profile.get("next_race_date", ""),
-        "health_notes": profile.get("health_notes", ""),
-        "preferences": profile.get("preferences", ""),
-    }
+    """Convert Supabase profile row to a flat dict for system prompt.
+    Includes all fields — old and new — to maximize context for Trixa."""
+    d = {}
+    # Identity
+    for k in ("name", "display_name", "email"):
+        if profile.get(k): d[k] = profile[k]
+    # Experience
+    for k in ("experience_level", "ironman_finishes", "years_training"):
+        if profile.get(k): d[k] = profile[k]
+    # Goals (new)
+    for k in ("goal", "vision", "season_goal", "short_term_goal"):
+        if profile.get(k): d[k] = profile[k]
+    # Physical
+    if profile.get("weight_kg"): d["weight_kg"] = float(profile["weight_kg"])
+    if profile.get("age"): d["age"] = profile["age"]
+    # Zones — old field names
+    for k in ("ftp_watts", "at_pace", "lt_pace", "at_hr", "lt_hr", "css"):
+        if profile.get(k): d[k] = profile[k]
+    # Zones — new field names
+    for k in ("ftp", "css_per_100m", "threshold_pace", "threshold_hr", "max_hr"):
+        if profile.get(k): d[k] = profile[k]
+    # Race
+    for k in ("next_race_name", "next_race_date"):
+        if profile.get(k): d[k] = profile[k]
+    # Notes
+    for k in ("health_notes", "preferences", "notes"):
+        if profile.get(k): d[k] = profile[k]
+    return d
 
 
 # ── Conversations ────────────────────────────────────────────────

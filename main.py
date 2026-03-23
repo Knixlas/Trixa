@@ -555,6 +555,46 @@ Max 2 observationer. Bara saker varda att komma ihag over tid. Tom array om inge
         print(f"[memory] Error: {e}")
 
 
+# ── Debug: what does Trixa see? ──────────────────────────────────
+
+@app.get("/api/debug/context")
+async def debug_context(request: Request):
+    """Show what data Trixa has access to (for debugging)."""
+    uid, token = _get_auth(request)
+    profile = None
+    activities = None
+    memories = None
+    plan = None
+    errors = []
+
+    try:
+        profile = db.get_profile(uid, token)
+    except Exception as e:
+        errors.append(f"profile: {e}")
+    try:
+        activities = db.get_recent_strava_activities(uid, token, days=60)
+    except Exception as e:
+        errors.append(f"activities: {e}")
+    try:
+        memories = db.get_coach_memories(uid, token)
+    except Exception as e:
+        errors.append(f"memories: {e}")
+    try:
+        from_d = datetime.now().strftime("%Y-%m-%d")
+        to_d = (datetime.now() + timedelta(days=10)).strftime("%Y-%m-%d")
+        plan = db.get_planned_sessions(uid, token, from_d, to_d)
+    except Exception as e:
+        errors.append(f"plan: {e}")
+
+    return {
+        "profile_fields": db.profile_to_dict(profile) if profile else None,
+        "activities_count": len(activities) if activities else 0,
+        "memories": memories or [],
+        "planned_sessions": len(plan) if plan else 0,
+        "errors": errors,
+    }
+
+
 # ── Goals ────────────────────────────────────────────────────────
 
 @app.get("/api/goals")
