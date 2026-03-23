@@ -64,6 +64,23 @@ class DiscountRequest(BaseModel):
 
 WEEKDAYS_SV = ["mandag", "tisdag", "onsdag", "torsdag", "fredag", "lordag", "sondag"]
 
+SET_GOALS_TOOL = {
+    "name": "set_athlete_goals",
+    "description": (
+        "Spara atletens mal efter att ni diskuterat och kommit overens. "
+        "Anvand detta nar atleten och du har formulerat vision, sasongmal eller kortsiktigt mal. "
+        "Skicka BARA de falt som andras."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "vision": {"type": "string", "description": "Meningen med traningen — varfor tranar atleten? T.ex. 'Leva aktivt och prestera i Ironman'"},
+            "season_goal": {"type": "string", "description": "Sasongmal — konkret mal for sassongen. T.ex. 'Ironman Kalmar under 10:00, augusti 2026'"},
+            "short_term_goal": {"type": "string", "description": "Kortsiktigt mal — fokus kommande 4-6 veckor. T.ex. 'Bygga lopvolym till 45km/vecka utan skador'"},
+        },
+    },
+}
+
 UPDATE_ZONES_TOOL = {
     "name": "update_athlete_zones",
     "description": (
@@ -166,6 +183,21 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
         template += "\n\n" + phases
     except Exception:
         pass
+
+    # --- Inject athlete goals ---
+    if profile:
+        goal_lines = []
+        if profile.get("vision"):
+            goal_lines.append(f"- Vision: {profile['vision']}")
+        if profile.get("season_goal"):
+            goal_lines.append(f"- Sasongmal: {profile['season_goal']}")
+        if profile.get("short_term_goal"):
+            goal_lines.append(f"- Kortsiktigt mal: {profile['short_term_goal']}")
+        if goal_lines:
+            template += "\n\n## Atletens mal\n" + "\n".join(goal_lines)
+            template += "\nReferera till dessa mal nar du analyserar och planerar. Varje veckoplan ska motiveras mot malen."
+        else:
+            template += "\n\n## Atletens mal\nInga mal satta annu. Fraga atleten om vision, sasongmal och kortsiktigt mal tidigt i samtalet."
 
     # --- Inject athlete zones/key metrics ---
     if profile:
@@ -350,7 +382,7 @@ async def chat(req: ChatRequest, request: Request):
         clean.append({"role": "user", "content": req.message})
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    tools = [WORKOUT_TOOL, UPDATE_ZONES_TOOL] if can_use_feature(tier, "workout_export") else None
+    tools = [WORKOUT_TOOL, UPDATE_ZONES_TOOL, SET_GOALS_TOOL] if can_use_feature(tier, "workout_export") else None
 
     # Non-streaming when tools enabled (to handle tool_use blocks)
     if tools:
@@ -361,6 +393,7 @@ async def chat(req: ChatRequest, request: Request):
         text_parts = []
         workout_data = None
         zones_update = None
+        goals_update = None
         for block in response_obj.content:
             if block.type == "text":
                 text_parts.append(block.text)
@@ -368,6 +401,16 @@ async def chat(req: ChatRequest, request: Request):
                 workout_data = block.input
             elif block.type == "tool_use" and block.name == "update_athlete_zones":
                 zones_update = block.input
+            elif block.type == "tool_use" and block.name == "set_athlete_goals":
+                goals_update = block.input
+                # Auto-save goals (Trixa and athlete agreed)
+                try:
+                    fields = {k: v for k, v in goals_update.items() if v}
+                    if fields:
+                        fields["goal_updated_at"] = datetime.now().isoformat()
+                        db.update_profile(uid, token, fields)
+                except Exception as e:
+                    print(f"Goals save error: {e}")
 
         response_text = "\n".join(text_parts)
         _save_conv(uid, token, req.history, req.message, response_text)
@@ -376,6 +419,8 @@ async def chat(req: ChatRequest, request: Request):
             result["workout"] = workout_data
         if zones_update:
             result["zones_update"] = zones_update
+        if goals_update:
+            result["goals_update"] = goals_update
         return result
 
     # Streaming (no tools)
@@ -406,6 +451,35 @@ def _save_conv(uid, token, history, message, response):
         db.save_conversation(uid, token, full, None)
     except Exception:
         pass
+
+
+# ── Goals ────────────────────────────────────────────────────────
+
+@app.get("/api/goals")
+async def get_goals(request: Request):
+    uid, token = _get_auth(request)
+    profile = db.get_profile(uid, token)
+    if not profile:
+        return {"vision": None, "season_goal": None, "short_term_goal": None}
+    return {
+        "vision": profile.get("vision"),
+        "season_goal": profile.get("season_goal"),
+        "short_term_goal": profile.get("short_term_goal"),
+    }
+
+
+@app.post("/api/goals")
+async def save_goals(request: Request):
+    uid, token = _get_auth(request)
+    body = await request.json()
+    fields = {}
+    for k in ("vision", "season_goal", "short_term_goal"):
+        if k in body:
+            fields[k] = body[k]
+    if fields:
+        fields["goal_updated_at"] = datetime.now().isoformat()
+        db.update_profile(uid, token, fields)
+    return {"ok": True}
 
 
 # ── Athlete Zones ────────────────────────────────────────────────
