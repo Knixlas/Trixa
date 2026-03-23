@@ -479,49 +479,82 @@ async def chat(req: ChatRequest, request: Request):
 
     # Non-streaming when tools enabled (to handle tool_use blocks)
     if tools:
-        response_obj = api_client.messages.create(
-            model=MODEL, max_tokens=2048, system=system_prompt,
-            messages=clean, tools=tools,
-        )
-        text_parts = []
+        messages_for_api = list(clean)
         workout_data = None
         zones_update = None
         goals_update = None
         plan_saved = False
-        for block in response_obj.content:
-            if block.type == "text":
-                text_parts.append(block.text)
-            elif block.type == "tool_use" and block.name == "create_workout_file":
-                workout_data = block.input
-            elif block.type == "tool_use" and block.name == "update_athlete_zones":
-                zones_update = block.input
-            elif block.type == "tool_use" and block.name == "set_athlete_goals":
-                goals_update = block.input
-                try:
-                    fields = {k: v for k, v in goals_update.items() if v}
-                    if fields:
-                        fields["goal_updated_at"] = datetime.now().isoformat()
-                        db.update_profile(uid, token, fields)
-                except Exception as e:
-                    print(f"Goals save error: {e}")
-            elif block.type == "tool_use" and block.name == "update_athlete_profile":
-                try:
-                    allowed = {"experience_level", "age", "weight_kg", "years_training",
-                               "ironman_finishes", "weekly_hours", "next_race_name",
-                               "health_notes", "goal"}
-                    fields = {k: v for k, v in block.input.items() if k in allowed and v is not None}
-                    if fields:
-                        db.update_profile(uid, token, fields)
-                        print(f"[profile] Updated: {list(fields.keys())}")
-                except Exception as e:
-                    print(f"Profile update error: {e}")
-            elif block.type == "tool_use" and block.name == "plan_training_sessions":
-                try:
-                    db.upsert_planned_sessions_batch(uid, block.input.get("sessions", []))
-                    plan_saved = True
-                    print(f"[plan] Saved {len(block.input.get('sessions', []))} sessions")
-                except Exception as e:
-                    print(f"Plan save error: {e}")
+        text_parts = []
+        max_rounds = 5  # safety limit
+
+        for _round in range(max_rounds):
+            response_obj = api_client.messages.create(
+                model=MODEL, max_tokens=2048, system=system_prompt,
+                messages=messages_for_api, tools=tools,
+            )
+
+            # Collect text and tool_use blocks
+            tool_results = []
+            for block in response_obj.content:
+                if block.type == "text":
+                    text_parts.append(block.text)
+                elif block.type == "tool_use":
+                    # Process tool
+                    tool_result_content = "OK"
+                    if block.name == "create_workout_file":
+                        workout_data = block.input
+                        tool_result_content = "Workout skapad"
+                    elif block.name == "update_athlete_zones":
+                        zones_update = block.input
+                        tool_result_content = "Nyckeltal uppdaterade"
+                    elif block.name == "set_athlete_goals":
+                        goals_update = block.input
+                        try:
+                            fields = {k: v for k, v in goals_update.items() if v}
+                            if fields:
+                                fields["goal_updated_at"] = datetime.now().isoformat()
+                                db.update_profile(uid, token, fields)
+                            tool_result_content = "Mal sparade"
+                        except Exception as e:
+                            tool_result_content = f"Fel: {e}"
+                            print(f"Goals save error: {e}")
+                    elif block.name == "update_athlete_profile":
+                        try:
+                            allowed = {"experience_level", "age", "weight_kg", "years_training",
+                                       "ironman_finishes", "weekly_hours", "next_race_name",
+                                       "health_notes", "goal"}
+                            fields = {k: v for k, v in block.input.items() if k in allowed and v is not None}
+                            if fields:
+                                db.update_profile(uid, token, fields)
+                                print(f"[profile] Updated: {list(fields.keys())}")
+                            tool_result_content = "Profil uppdaterad"
+                        except Exception as e:
+                            tool_result_content = f"Fel: {e}"
+                            print(f"Profile update error: {e}")
+                    elif block.name == "plan_training_sessions":
+                        try:
+                            sessions = block.input.get("sessions", [])
+                            db.upsert_planned_sessions_batch(uid, sessions)
+                            plan_saved = True
+                            tool_result_content = f"Sparade {len(sessions)} pass i planen"
+                            print(f"[plan] Saved {len(sessions)} sessions")
+                        except Exception as e:
+                            tool_result_content = f"Fel: {e}"
+                            print(f"Plan save error: {e}")
+
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": tool_result_content,
+                    })
+
+            # If no tool calls, we're done
+            if response_obj.stop_reason != "tool_use":
+                break
+
+            # Send tool results back to Claude for follow-up text
+            messages_for_api.append({"role": "assistant", "content": response_obj.content})
+            messages_for_api.append({"role": "user", "content": tool_results})
 
         response_text = "\n".join(text_parts)
         _save_conv(uid, token, req.history, req.message, response_text)
