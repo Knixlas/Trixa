@@ -7,15 +7,22 @@ from __future__ import annotations
 import os
 from datetime import date, datetime, timedelta, timezone
 
+from httpx import Timeout
 from supabase import create_client, Client
+from supabase.lib.client_options import ClientOptions
 
 TRIAL_DAYS = 30
+
+# Supabase free tier can be slow — increase timeouts
+_SB_TIMEOUT = Timeout(15.0, connect=10.0)
+_SB_OPTIONS = ClientOptions(postgrest_client_timeout=15)
 
 
 def get_client() -> Client:
     return create_client(
         os.environ.get("SUPABASE_URL", ""),
         os.environ.get("SUPABASE_ANON_KEY", ""),
+        options=_SB_OPTIONS,
     )
 
 
@@ -23,6 +30,7 @@ def get_admin_client() -> Client:
     return create_client(
         os.environ.get("SUPABASE_URL", ""),
         os.environ.get("SUPABASE_SERVICE_KEY", ""),
+        options=_SB_OPTIONS,
     )
 
 

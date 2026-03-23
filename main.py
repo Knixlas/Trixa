@@ -548,7 +548,10 @@ async def save_goals(request: Request):
 @app.get("/api/athlete/zones")
 async def get_zones(request: Request):
     uid, token = _get_auth(request)
-    profile = db.get_profile(uid, token)
+    try:
+        profile = db.get_profile(uid, token)
+    except Exception:
+        return {"zones": None}
     if not profile:
         return {"zones": None}
     return {"zones": {
