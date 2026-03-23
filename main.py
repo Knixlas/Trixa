@@ -81,6 +81,30 @@ SET_GOALS_TOOL = {
     },
 }
 
+UPDATE_PROFILE_TOOL = {
+    "name": "update_athlete_profile",
+    "description": (
+        "Uppdatera atletens profil med viktig information som framkommer i samtalet. "
+        "Anvand detta nar atleten berattar om sin bakgrund, mal, skador, preferenser, etc. "
+        "Spara BARA fakta — inte tolkningar. T.ex. om atleten sager 'jag har gjort 13 Ironman' "
+        "spara ironman_finishes=13. Uppdatera tyst utan att fraga — det ar inte en plan, det ar fakta."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "experience_level": {"type": "string", "enum": ["beginner", "intermediate", "advanced"]},
+            "age": {"type": "integer"},
+            "weight_kg": {"type": "number"},
+            "years_training": {"type": "integer", "description": "Antal ar med traning"},
+            "ironman_finishes": {"type": "integer"},
+            "weekly_hours": {"type": "number", "description": "Tillgangliga traningstimmar per vecka"},
+            "next_race_name": {"type": "string", "description": "Nasta tavling, t.ex. 'Ironman Kalmar, 15 aug 2026'"},
+            "health_notes": {"type": "string", "description": "Skador, mediciner, begransningar"},
+            "goal": {"type": "string", "description": "Overgrippande mal"},
+        },
+    },
+}
+
 PLAN_SESSIONS_TOOL = {
     "name": "plan_training_sessions",
     "description": (
@@ -450,7 +474,7 @@ async def chat(req: ChatRequest, request: Request):
         clean.append({"role": "user", "content": req.message})
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    tools = [WORKOUT_TOOL, PLAN_SESSIONS_TOOL, UPDATE_ZONES_TOOL, SET_GOALS_TOOL] if can_use_feature(tier, "workout_export") else None
+    tools = [WORKOUT_TOOL, PLAN_SESSIONS_TOOL, UPDATE_ZONES_TOOL, SET_GOALS_TOOL, UPDATE_PROFILE_TOOL] if can_use_feature(tier, "workout_export") else None
 
     # Non-streaming when tools enabled (to handle tool_use blocks)
     if tools:
@@ -479,6 +503,17 @@ async def chat(req: ChatRequest, request: Request):
                         db.update_profile(uid, token, fields)
                 except Exception as e:
                     print(f"Goals save error: {e}")
+            elif block.type == "tool_use" and block.name == "update_athlete_profile":
+                try:
+                    allowed = {"experience_level", "age", "weight_kg", "years_training",
+                               "ironman_finishes", "weekly_hours", "next_race_name",
+                               "health_notes", "goal"}
+                    fields = {k: v for k, v in block.input.items() if k in allowed and v is not None}
+                    if fields:
+                        db.update_profile(uid, token, fields)
+                        print(f"[profile] Updated: {list(fields.keys())}")
+                except Exception as e:
+                    print(f"Profile update error: {e}")
             elif block.type == "tool_use" and block.name == "plan_training_sessions":
                 try:
                     db.upsert_planned_sessions_batch(uid, block.input.get("sessions", []))
