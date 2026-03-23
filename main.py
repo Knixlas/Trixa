@@ -926,21 +926,49 @@ async def coach_brief(request: Request):
     now = datetime.now()
     weekday = ["mandag","tisdag","onsdag","torsdag","fredag","lordag","sondag"][now.weekday()]
 
+    # Get today's planned session and yesterday's activity for comparison
+    plan_today = ""
+    yesterday_activity = ""
+    try:
+        today_str = now.strftime("%Y-%m-%d")
+        yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        plan_sessions = db.get_planned_sessions(uid, token, today_str, today_str)
+        if plan_sessions:
+            plan_today = ", ".join(p.get("title", "") for p in plan_sessions)
+    except Exception:
+        pass
+
+    # Find yesterday's activity
+    for a in (activities or []):
+        if a.get("date") == (now - timedelta(days=1)).strftime("%Y-%m-%d"):
+            parts = [a.get("type", "")]
+            if a.get("duration_min"): parts.append(f"{int(a['duration_min'])}min")
+            if a.get("distance_km"): parts.append(f"{a['distance_km']}km")
+            if a.get("pace"): parts.append(a["pace"])
+            if a.get("avg_hr"): parts.append(f"puls {a['avg_hr']}")
+            if a.get("rating"): parts.append(f"betyg {a['rating']}/5")
+            yesterday_activity = ", ".join(parts)
+            break
+
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    system = f"""Du ar Trixa, personlig tranare. Skriv en kort coachanalys (max 3 meningar) baserat pa atletens senaste traning.
+    system = f"""Du ar Trixa, personlig tranare. Skriv en kort proaktiv coachanalys for dashboarden.
 
 Regler:
-- Var direkt, varm, aldrig fluffig
-- Referera till faktisk data (pass, puls, fart)
-- Ge ETT konkret rad for kommande dagar
-- Om du ser ett monster (t.ex. for hard traning), namna det
-- Om det ar relevant, lagg till en uppfoljning: "Aterkommer pa [dag]"
-- Svara pa svenska
-- Tilltala atleten vid namn om du vet det
+- Max 3 meningar, direkt och varm
+- FRAGA om gardasgens pass om det finns ett (hur kannas det? ratt intensitet?)
+- Referera till FAKTISK data (typ, puls, fart, distans)
+- Om gardasgens pass avvek fran planen — kommentera det
+- Papminn om dagens planerade pass om det finns ett
+- Om du ser monster (overtraning, for hart, bra trend) — namna det
+- Avsluta med uppfoljning: "Aterkommer pa [dag]" om relevant
+- Svara pa svenska, tilltala vid namn
 
 Idag ar {weekday} {now.strftime('%Y-%m-%d')}."""
 
     user_msg = f"""Atlet: {name}
+
+Gardagens pass: {yesterday_activity or 'Vila / inget registrerat'}
+Dagens planerade pass: {plan_today or 'Inget planerat'}
 
 Senaste 14 dagars traning:
 {chr(10).join(act_lines) if act_lines else 'Ingen data'}
@@ -948,7 +976,7 @@ Senaste 14 dagars traning:
 Minnesanteckningar om atleten:
 {chr(10).join(mem_lines) if mem_lines else 'Inga anteckningar annu'}
 
-Skriv en kort dashboardanalys (max 3 meningar + eventuell uppfoljningsdag)."""
+Skriv en kort proaktiv dashboardanalys."""
 
     try:
         response = api_client.messages.create(

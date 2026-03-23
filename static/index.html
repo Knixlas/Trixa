@@ -1282,6 +1282,10 @@ async function applyDiscount() {
 async function newConversation() {
   try { await fetch('/api/conversation', {method:'DELETE', headers:hdrs()}); } catch {}
   chatHistory = [];
+  // Inject coach nudge as opening message so Trixa starts proactively
+  if (cachedBrief && cachedBrief.brief) {
+    chatHistory = [{role: 'assistant', content: cachedBrief.brief}];
+  }
   renderChat(); renderHome();
   switchTab('chat');
 }
@@ -1299,7 +1303,20 @@ async function showApp() {
     chatHistory = d.messages || [];
   } catch { chatHistory = []; }
   await fetchStrava();
-  renderHome(); renderChat(); renderProfile();
+  renderHome(); renderProfile();
+  // Wait for coach brief to load, then inject into empty chat
+  if (chatHistory.length === 0) {
+    try {
+      const br = await fetch('/api/coach/brief', {headers: hdrs()});
+      if (br.ok) {
+        cachedBrief = await br.json();
+        if (cachedBrief && cachedBrief.brief) {
+          chatHistory = [{role: 'assistant', content: cachedBrief.brief}];
+        }
+      }
+    } catch {}
+  }
+  renderChat();
 
   // Check for callback results
   const params = new URLSearchParams(window.location.search);
