@@ -304,16 +304,46 @@ def delete_strava_tokens(user_id: str):
 
 
 def upsert_strava_activities(user_id: str, activities: list[dict]) -> int:
-    """Batch upsert activities. Returns count."""
+    """Batch upsert activities into both strava_activities and training_log."""
     admin = get_admin_client()
     count = 0
     for act in activities:
         act["user_id"] = user_id
-        existing = admin.table("strava_activities").select("id").eq("strava_id", act["strava_id"]).execute()
+        strava_id = act.get("strava_id")
+
+        # Upsert into strava_activities
+        existing = admin.table("strava_activities").select("id").eq("strava_id", strava_id).execute()
         if existing.data:
-            admin.table("strava_activities").update(act).eq("strava_id", act["strava_id"]).execute()
+            admin.table("strava_activities").update(act).eq("strava_id", strava_id).execute()
         else:
             admin.table("strava_activities").insert(act).execute()
+
+        # Mirror into training_log (single source of truth)
+        try:
+            log_entry = {
+                "user_id": user_id,
+                "date": act.get("date"),
+                "sport": act.get("type", "other"),
+                "title": act.get("name"),
+                "duration_min": act.get("duration_min"),
+                "distance_km": act.get("distance_km"),
+                "avg_hr": act.get("avg_hr"),
+                "avg_power": act.get("avg_power"),
+                "pace": act.get("pace"),
+                "source": "strava",
+                "strava_id": strava_id,
+            }
+            # Remove None values
+            log_entry = {k: v for k, v in log_entry.items() if v is not None}
+
+            existing_log = admin.table("training_log").select("id").eq("strava_id", strava_id).execute()
+            if existing_log.data:
+                admin.table("training_log").update(log_entry).eq("strava_id", strava_id).execute()
+            else:
+                admin.table("training_log").insert(log_entry).execute()
+        except Exception as e:
+            print(f"[training_log] Mirror error for strava_id {strava_id}: {e}")
+
         count += 1
     return count
 
