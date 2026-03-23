@@ -27,6 +27,8 @@ from core.membership import (
 )
 
 SYSTEM_PROMPT_FILE = ROOT / "prompts" / "system_prompt.md"
+COACHING_KB_FILE = ROOT / "prompts" / "coaching_knowledge.md"
+PHASES_FILE = ROOT / "prompts" / "phases.md"
 MODEL = "claude-sonnet-4-5"
 MAX_HISTORY = 20
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
@@ -95,7 +97,8 @@ WORKOUT_TOOL = {
 }
 
 
-def _build_system_prompt(profile: dict | None, activities: list[dict] | None = None) -> str:
+def _build_system_prompt(profile: dict | None, activities: list[dict] | None = None,
+                         coach_memories: list[dict] | None = None) -> str:
     template = SYSTEM_PROMPT_FILE.read_text(encoding="utf-8")
     now = datetime.now()
     template = (
@@ -103,6 +106,8 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
         .replace("{TODAY_DATE}", now.strftime("%Y-%m-%d"))
         .replace("{TODAY_WEEKDAY}", WEEKDAYS_SV[now.weekday()])
     )
+
+    # Athlete profile
     if profile:
         p = db.profile_to_dict(profile)
         lines = [f"- {k}: {v}" for k, v in p.items() if v]
@@ -110,7 +115,7 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
     else:
         template = template.replace("{ATHLETE_PROFILE}", "Ingen profil tillganglig.")
 
-    # Inject recent Strava activities
+    # Strava activities
     if activities:
         lines = []
         for a in activities[:20]:
@@ -129,6 +134,50 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
         template = template.replace("{RECENT_ACTIVITIES}", "\n".join(lines))
     else:
         template = template.replace("{RECENT_ACTIVITIES}", "Ingen Strava-koppling eller inga aktiviteter.")
+
+    # --- Append coaching knowledge base ---
+    try:
+        coaching_kb = COACHING_KB_FILE.read_text(encoding="utf-8")
+        template += "\n\n" + coaching_kb
+    except Exception:
+        pass
+
+    # --- Append phase instructions ---
+    try:
+        phases = PHASES_FILE.read_text(encoding="utf-8")
+        template += "\n\n" + phases
+    except Exception:
+        pass
+
+    # --- Inject athlete zones/key metrics ---
+    if profile:
+        zone_lines = []
+        if profile.get("ftp"):
+            zone_lines.append(f"- FTP: {profile['ftp']}W")
+        if profile.get("css_per_100m"):
+            zone_lines.append(f"- CSS: {profile['css_per_100m']}/100m")
+        if profile.get("threshold_pace"):
+            zone_lines.append(f"- Troskelfart: {profile['threshold_pace']}/km")
+        if profile.get("threshold_hr"):
+            zone_lines.append(f"- Troskelpuls: {profile['threshold_hr']} bpm")
+        if profile.get("max_hr"):
+            zone_lines.append(f"- Max puls: {profile['max_hr']} bpm")
+        if zone_lines:
+            template += "\n\n## Atletens nyckeltal\n" + "\n".join(zone_lines)
+            template += "\nAnvand dessa varden for att berakna exakta zoner i alla pass."
+
+    # --- Inject coach memory (relational observations) ---
+    if coach_memories:
+        mem_lines = []
+        for m in coach_memories[:10]:
+            conf = m.get("confidence", 0)
+            seen = m.get("times_seen", 1)
+            mem_lines.append(f"- [{m.get('category','')}] {m.get('observation','')} (sett {seen}x, konfidens {conf:.0%})")
+        if mem_lines:
+            template += "\n\n## Coachens minnesanteckningar om atleten\n"
+            template += "Dessa ar saker du observerat over tid. Anvand dem aktivt i dina svar.\n"
+            template += "\n".join(mem_lines)
+
     return template
 
 
@@ -247,13 +296,17 @@ async def chat(req: ChatRequest, request: Request):
     except Exception:
         pass
 
-    # Build system prompt from profile + activities
+    # Build system prompt from profile + activities + coach memory
     profile = db.get_profile(uid, token)
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=14)
+        activities = db.get_recent_strava_activities(uid, token, days=30)
     except Exception:
         activities = None
-    system_prompt = _build_system_prompt(profile, activities)
+    try:
+        coach_memories = db.get_coach_memories(uid, token)
+    except Exception:
+        coach_memories = None
+    system_prompt = _build_system_prompt(profile, activities, coach_memories)
 
     # Prepare messages (strip _images from history to avoid sending base64 twice)
     clean = []
