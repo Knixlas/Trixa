@@ -322,17 +322,7 @@ input:focus { border-color: var(--accent); }
     <div class="status-strip" id="status-strip"></div>
     <div id="tip-container"></div>
 
-    <!-- Mal -->
-    <div class="section-card open" id="card-goals">
-      <div class="section-header" onclick="toggleSection('card-goals')">
-        <h3>&#x1F3AF; Mal</h3><span class="chevron">&#x25B6;</span>
-      </div>
-      <div class="section-body" id="goals-body">
-        <div style="color:var(--text-dim);font-size:0.85rem">Laddar...</div>
-      </div>
-    </div>
-
-    <!-- Nasta pass -->
+    <!-- Nasta pass (OPEN by default) -->
     <div class="section-card open" id="card-upcoming">
       <div class="section-header" onclick="toggleSection('card-upcoming')">
         <h3>&#x1F3CB; Nasta pass</h3><span class="chevron">&#x25B6;</span>
@@ -342,7 +332,25 @@ input:focus { border-color: var(--accent); }
       </div>
     </div>
 
-    <!-- Nyckeltal -->
+    <!-- Veckoplan (OPEN by default) -->
+    <div class="section-card open" id="card-plan">
+      <div class="section-header" onclick="toggleSection('card-plan')">
+        <h3>&#x1F4C5; Veckoplan</h3><span class="chevron">&#x25B6;</span>
+      </div>
+      <div class="section-body" id="plan-content"></div>
+    </div>
+
+    <!-- Mal (collapsed) -->
+    <div class="section-card" id="card-goals">
+      <div class="section-header" onclick="toggleSection('card-goals')">
+        <h3>&#x1F3AF; Mal</h3><span class="chevron">&#x25B6;</span>
+      </div>
+      <div class="section-body" id="goals-body">
+        <div style="color:var(--text-dim);font-size:0.85rem">Laddar...</div>
+      </div>
+    </div>
+
+    <!-- Nyckeltal (collapsed) -->
     <div class="section-card" id="card-zones">
       <div class="section-header" onclick="toggleSection('card-zones')">
         <h3>&#x1F4CA; Nyckeltal</h3><span class="chevron">&#x25B6;</span>
@@ -352,20 +360,12 @@ input:focus { border-color: var(--accent); }
       </div>
     </div>
 
-    <!-- Senaste traning -->
-    <div class="section-card open" id="card-activities">
+    <!-- Senaste traning (collapsed) -->
+    <div class="section-card" id="card-activities">
       <div class="section-header" onclick="toggleSection('card-activities')">
         <h3>&#x1F3C3; Senaste traning</h3><span class="chevron">&#x25B6;</span>
       </div>
       <div class="section-body" id="strava-activities"></div>
-    </div>
-
-    <!-- Veckoplan -->
-    <div class="section-card" id="card-plan">
-      <div class="section-header" onclick="toggleSection('card-plan')">
-        <h3>&#x1F4C5; Veckoplan</h3><span class="chevron">&#x25B6;</span>
-      </div>
-      <div class="section-body" id="plan-content"></div>
     </div>
   </div>
 
