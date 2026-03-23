@@ -903,9 +903,12 @@ async function sendMessage() {
         appendMsg('assistant', null, null, '<div style="color:var(--accent);font-size:0.85rem">&#x1F3AF; Mal uppdaterade!</div>');
       }
       if (data.plan_saved) {
-        cachedPlanStatus = null; // Force refresh
-        renderNextSession();
-        renderWeekPlan();
+        cachedPlanStatus = null;
+        // Small delay to let DB commit
+        await new Promise(r => setTimeout(r, 500));
+        await renderNextSession();
+        await renderWeekPlan();
+        appendMsg('assistant', null, null, '<div style="color:var(--accent);font-size:0.85rem">&#x1F4C5; Planen ar uppdaterad pa hemsidan!</div>');
       }
     }
     renderHome();
