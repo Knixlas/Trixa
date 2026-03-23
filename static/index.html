@@ -237,10 +237,12 @@ input:focus { border-color: var(--accent); }
   display: flex; flex-direction: column; gap: 0.5rem;
 }
 .chat-input-row { display: flex; gap: 0.5rem; }
-.chat-input-row input {
+.chat-input-row textarea {
   flex: 1; padding: 0.7rem 1rem; background: var(--surface);
-  border: 1px solid #2a2a3a; border-radius: 20px;
+  border: 1px solid #2a2a3a; border-radius: 16px;
   color: var(--text); font-size: 0.95rem; outline: none;
+  resize: none; overflow-y: auto; min-height: 44px; max-height: 150px;
+  line-height: 1.4; font-family: inherit;
 }
 .chat-input-row button {
   width: 40px; height: 40px; border-radius: 50%;
@@ -380,7 +382,7 @@ input:focus { border-color: var(--accent); }
       <div class="img-preview-bar" id="img-preview-bar"></div>
       <div class="chat-input-row">
         <button class="img-btn" onclick="document.getElementById('img-input').click()" title="Bifoga bild">&#x1F4F7;</button>
-        <input type="text" id="chat-input" placeholder="Skriv till Trixa..." onkeydown="if(event.key==='Enter')sendMessage()">
+        <textarea id="chat-input" placeholder="Skriv till Trixa..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,150)+'px'"></textarea>
         <button onclick="sendMessage()" id="send-btn">&#x2191;</button>
       </div>
       <input type="file" id="img-input" accept="image/*" multiple style="display:none" onchange="handleImageSelect(event)">
