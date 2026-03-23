@@ -346,6 +346,22 @@ async def get_profile(request: Request):
     return {"profile": db.get_profile(uid, token)}
 
 
+@app.post("/api/profile")
+async def update_profile(request: Request):
+    uid, token = _get_auth(request)
+    body = await request.json()
+    # Whitelist allowed fields
+    allowed = {
+        "experience_level", "age", "weight_kg", "years_training",
+        "ironman_finishes", "weekly_hours", "next_race_name",
+        "next_race_date", "health_notes", "goal", "notes",
+    }
+    fields = {k: v for k, v in body.items() if k in allowed and v is not None}
+    if fields:
+        db.update_profile(uid, token, fields)
+    return {"ok": True}
+
+
 # ── Subscription ─────────────────────────────────────────────────
 
 @app.get("/api/subscription")

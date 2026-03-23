@@ -387,6 +387,29 @@ input:focus { border-color: var(--accent); }
   <div id="profile-view" class="view">
     <div class="header"><h1>Profil</h1></div>
     <div class="profile-section" id="profile-info"></div>
+
+    <div class="profile-section" id="athlete-edit-section">
+      <h3>Om dig</h3>
+      <div class="profile-input"><label>Erfarenhetsniva</label>
+        <select id="p-level" style="width:100%;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-size:0.9rem">
+          <option value="">Valj...</option>
+          <option value="beginner">Nyborjare</option>
+          <option value="intermediate">Motionar</option>
+          <option value="advanced">Avancerad</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+        <div class="profile-input"><label>Alder</label><input type="number" id="p-age" placeholder="46"></div>
+        <div class="profile-input"><label>Vikt (kg)</label><input type="number" id="p-weight" placeholder="75"></div>
+        <div class="profile-input"><label>Ar med traning</label><input type="number" id="p-years" placeholder="12"></div>
+        <div class="profile-input"><label>Ironman-starter</label><input type="number" id="p-im" placeholder="13"></div>
+        <div class="profile-input"><label>Timmar/vecka</label><input type="number" id="p-hours" placeholder="10"></div>
+      </div>
+      <div class="profile-input"><label>Nasta tavling</label><input type="text" id="p-race" placeholder="Ironman Kalmar, 15 aug 2026"></div>
+      <div class="profile-input"><label>Halsoanteckningar</label><input type="text" id="p-health" placeholder="T.ex. ont i handleden, Levaxin"></div>
+      <button class="btn btn-sm" onclick="saveAthleteProfile()" style="margin-top:0.5rem">Spara profil</button>
+    </div>
+
     <div class="profile-section" id="strava-section">
       <h3>Strava</h3>
       <div id="strava-status"></div>
@@ -1056,16 +1079,51 @@ async function renderProfile() {
     const r = await fetch('/api/profile', {headers: hdrs()});
     const d = await r.json();
     if (d.profile) {
+      // Intervals
       document.getElementById('icu-key').value = d.profile.intervals_api_key || '';
       document.getElementById('icu-athlete').value = d.profile.intervals_athlete_id || '';
+      // Zones
       document.getElementById('z-ftp').value = d.profile.ftp || '';
       document.getElementById('z-css').value = d.profile.css_per_100m || '';
       document.getElementById('z-pace').value = d.profile.threshold_pace || '';
       document.getElementById('z-thr').value = d.profile.threshold_hr || '';
       document.getElementById('z-max').value = d.profile.max_hr || '';
+      // Athlete profile
+      document.getElementById('p-level').value = d.profile.experience_level || '';
+      document.getElementById('p-age').value = d.profile.age || '';
+      document.getElementById('p-weight').value = d.profile.weight_kg || '';
+      document.getElementById('p-years').value = d.profile.years_training || '';
+      document.getElementById('p-im').value = d.profile.ironman_finishes || '';
+      document.getElementById('p-hours').value = d.profile.weekly_hours || '';
+      document.getElementById('p-race').value = d.profile.next_race_name || '';
+      document.getElementById('p-health').value = d.profile.health_notes || '';
     }
   } catch {}
   renderStravaProfile();
+}
+
+async function saveAthleteProfile() {
+  const data = {};
+  const level = document.getElementById('p-level').value;
+  const age = document.getElementById('p-age').value;
+  const weight = document.getElementById('p-weight').value;
+  const years = document.getElementById('p-years').value;
+  const im = document.getElementById('p-im').value;
+  const hours = document.getElementById('p-hours').value;
+  const race = document.getElementById('p-race').value;
+  const health = document.getElementById('p-health').value;
+  if (level) data.experience_level = level;
+  if (age) data.age = parseInt(age);
+  if (weight) data.weight_kg = parseFloat(weight);
+  if (years) data.years_training = parseInt(years);
+  if (im) data.ironman_finishes = parseInt(im);
+  if (hours) data.weekly_hours = parseFloat(hours);
+  if (race) data.next_race_name = race;
+  if (health) data.health_notes = health;
+  try {
+    const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
+    alert(r.ok ? 'Profil sparad!' : 'Kunde inte spara');
+  } catch (e) { alert('Fel: ' + e.message); }
 }
 
 async function saveZones() {
