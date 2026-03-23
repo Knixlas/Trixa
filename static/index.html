@@ -163,6 +163,10 @@ input:focus { border-color: var(--accent); }
 .activity-details .name { font-weight: 600; font-size: 0.8rem; }
 .activity-details .stats { color: var(--text-dim); font-size: 0.75rem; }
 .activity-date { color: var(--text-dim); font-size: 0.7rem; white-space: nowrap; }
+.rating-input { margin-top: 2px; }
+.rating-input .star { cursor: pointer; font-size: 0.9rem; color: #666; transition: color 0.1s; }
+.rating-input .star:hover, .rating-input .star:hover ~ .star { color: var(--accent); }
+.rating-display { font-size: 0.8rem; color: #f5a623; margin-top: 2px; }
 .strava-btn {
   width: 100%; padding: 0.5rem; background: #fc4c02; border: none;
   border-radius: 8px; color: white; font-size: 0.85rem; font-weight: 600;
@@ -970,6 +974,24 @@ async function applyZonesUpdate(zonesJson) {
   }
 }
 
+async function rateActivity(stravaId, rating, el) {
+  try {
+    const r = await fetch(`/api/activity/${stravaId}/rate`, {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({rating}),
+    });
+    if (r.ok) {
+      // Update display: replace clickable stars with solid stars
+      const container = el.parentElement;
+      container.innerHTML = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+      container.className = 'rating-display';
+      // Update cached data
+      const act = stravaData.activities.find(a => a.strava_id === stravaId);
+      if (act) act.rating = rating;
+    }
+  } catch (e) { console.error('Rating error:', e); }
+}
+
 async function pushWorkout(w) {
   try {
     const r = await fetch('/api/intervals/push', {method:'POST', headers:hdrs(), body:JSON.stringify({workout:w})});
@@ -1007,11 +1029,17 @@ function renderStravaActivities() {
                    a.distance_km ? `${a.distance_km}km` : '',
                    a.pace || '',
                    a.avg_hr ? `${a.avg_hr}bpm` : ''].filter(Boolean).join(' · ');
+    const stars = a.rating
+      ? `<div class="rating-display">${'★'.repeat(a.rating)}${'☆'.repeat(5-a.rating)}</div>`
+      : `<div class="rating-input" data-strava-id="${a.strava_id}">
+          ${[1,2,3,4,5].map(n => `<span class="star" onclick="rateActivity(${a.strava_id},${n},this)" title="${n}">☆</span>`).join('')}
+        </div>`;
     html += `<div class="activity-item">
       <div class="activity-icon">${icon}</div>
       <div class="activity-details">
         <div class="name">${esc(a.name || a.type)}</div>
         <div class="stats">${stats}</div>
+        ${stars}
       </div>
       <div class="activity-date">${a.date?.slice(5) || ''}</div>
     </div>`;

@@ -215,9 +215,10 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
     else:
         template = template.replace("{ATHLETE_PROFILE}", "Ingen profil tillganglig.")
 
-    # Strava activities
+    # Strava activities (with ratings)
     if activities:
         lines = []
+        rated_summary = {}
         for a in activities[:20]:
             parts = [f"- {a['date']}: {a['type']} \"{a.get('name', '')}\""]
             if a.get("duration_min"):
@@ -230,7 +231,23 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
                 parts.append(f"puls {a['avg_hr']}")
             if a.get("avg_power"):
                 parts.append(f"{a['avg_power']}W")
+            if a.get("rating"):
+                parts.append(f"betyg: {a['rating']}/5")
+                if a.get("rating_comment"):
+                    parts.append(f"kommentar: \"{a['rating_comment']}\"")
+                # Track preferences
+                t = a["type"]
+                if t not in rated_summary:
+                    rated_summary[t] = []
+                rated_summary[t].append(a["rating"])
             lines.append(", ".join(parts))
+        # Add preference summary
+        if rated_summary:
+            lines.append("\nTraningspreferenser (baserat pa betyg):")
+            for t, ratings in rated_summary.items():
+                avg = sum(ratings) / len(ratings)
+                emoji = "👍" if avg >= 4 else "👎" if avg <= 2 else "👌"
+                lines.append(f"  {emoji} {t}: snitt {avg:.1f}/5 ({len(ratings)} betygsatta)")
         template = template.replace("{RECENT_ACTIVITIES}", "\n".join(lines))
     else:
         template = template.replace("{RECENT_ACTIVITIES}", "Ingen Strava-koppling eller inga aktiviteter.")
@@ -1226,3 +1243,53 @@ async def strava_disconnect(request: Request):
     uid, _ = _get_auth(request)
     db.delete_strava_tokens(uid)
     return {"ok": True}
+
+
+# ── Workout Ratings ──────────────────────────────────────────────
+
+@app.post("/api/activity/{strava_id}/rate")
+async def rate_activity(strava_id: int, request: Request):
+    """Rate a completed activity (1-5 stars, optional comment)."""
+    uid, _ = _get_auth(request)
+    body = await request.json()
+    rating = body.get("rating")
+    comment = body.get("comment", "")
+    if not rating or rating < 1 or rating > 5:
+        raise HTTPException(400, "Rating maste vara 1-5")
+    admin = db.get_admin_client()
+    admin.table("strava_activities").update({
+        "rating": rating,
+        "rating_comment": comment,
+        "rated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("strava_id", strava_id).eq("user_id", uid).execute()
+    return {"ok": True}
+
+
+@app.get("/api/workout-preferences")
+async def workout_preferences(request: Request):
+    """Get user's workout type preferences based on ratings."""
+    uid, token = _get_auth(request)
+    client = db.get_client()
+    client.postgrest.auth(token)
+    result = client.table("strava_activities") \
+        .select("type, rating") \
+        .eq("user_id", uid) \
+        .not_.is_("rating", "null") \
+        .execute()
+    prefs = {}
+    for row in result.data:
+        t = row["type"]
+        if t not in prefs:
+            prefs[t] = {"ratings": [], "type": t}
+        prefs[t]["ratings"].append(row["rating"])
+    summary = []
+    for t, p in prefs.items():
+        avg = sum(p["ratings"]) / len(p["ratings"])
+        summary.append({
+            "type": t,
+            "avg_rating": round(avg, 1),
+            "count": len(p["ratings"]),
+            "liked": sum(1 for r in p["ratings"] if r >= 4),
+            "disliked": sum(1 for r in p["ratings"] if r <= 2),
+        })
+    return {"preferences": sorted(summary, key=lambda x: -x["avg_rating"])}
