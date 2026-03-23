@@ -282,8 +282,12 @@ input:focus { border-color: var(--accent); }
 
 /* ── Desktop ── */
 @media (min-width: 769px) {
-  .view, #chat-view .chat-messages, .chat-input-bar {
+  .view, #chat-view .chat-messages {
     max-width: 95%; margin-left: auto; margin-right: auto;
+  }
+  .chat-input-bar {
+    max-width: 100%; left: 0; right: 0;
+    padding-left: 2.5%; padding-right: 2.5%;
   }
 }
 </style>
