@@ -470,6 +470,25 @@ def upsert_planned_session(user_id: str, session: dict):
 
 
 def upsert_planned_sessions_batch(user_id: str, sessions: list[dict]):
-    """Upsert multiple planned sessions."""
+    """Replace planned sessions for the date range covered by the new batch.
+
+    Deletes all existing sessions within the date range first, then inserts
+    the new ones. This ensures removed or changed sessions don't leave stale data.
+    """
+    if not sessions:
+        return
+    admin = get_admin_client()
+    dates = [s["date"] for s in sessions if "date" in s]
+    if dates:
+        min_date = min(dates)
+        max_date = max(dates)
+        admin.table("planned_sessions") \
+            .delete() \
+            .eq("user_id", user_id) \
+            .gte("date", min_date) \
+            .lte("date", max_date) \
+            .execute()
     for s in sessions:
-        upsert_planned_session(user_id, s)
+        s["user_id"] = user_id
+        s["updated_at"] = datetime.now(timezone.utc).isoformat()
+        admin.table("planned_sessions").insert(s).execute()
