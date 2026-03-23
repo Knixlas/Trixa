@@ -325,6 +325,43 @@ def get_recent_strava_activities(user_id: str, access_token: str, days: int = 14
 
 # ── Coach Memory ────────────────────────────────────────────────
 
+def save_memory_observations(user_id: str, observations: list[dict]):
+    """Save coach memory observations. If similar exists, increment confidence."""
+    admin = get_admin_client()
+    for obs in observations:
+        cat = obs.get("category", "behavior")
+        text = obs.get("observation", "")
+        if not text:
+            continue
+        # Check for similar existing observation
+        try:
+            existing = (
+                admin.table("coach_memory")
+                .select("id, times_seen, confidence")
+                .eq("user_id", user_id)
+                .eq("category", cat)
+                .ilike("observation", f"%{text[:30]}%")
+                .execute()
+            )
+            if existing.data:
+                row = existing.data[0]
+                new_conf = min(1.0, row["confidence"] + 0.1)
+                admin.table("coach_memory").update({
+                    "times_seen": row["times_seen"] + 1,
+                    "confidence": new_conf,
+                    "last_seen": datetime.now(timezone.utc).isoformat(),
+                }).eq("id", row["id"]).execute()
+            else:
+                admin.table("coach_memory").insert({
+                    "user_id": user_id,
+                    "category": cat,
+                    "observation": text,
+                    "confidence": 0.6,
+                }).execute()
+        except Exception as e:
+            print(f"[memory] observation save error: {e}")
+
+
 def get_coach_memories(user_id: str, access_token: str) -> list[dict]:
     """Get coach memory observations for a user, ordered by confidence."""
     client = get_client()

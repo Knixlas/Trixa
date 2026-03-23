@@ -512,6 +512,47 @@ def _save_conv(uid, token, history, message, response):
         db.save_conversation(uid, token, full, None)
     except Exception:
         pass
+    # Fire-and-forget: write coach memory observations
+    import threading
+    threading.Thread(
+        target=_write_memory, args=(uid, message, response), daemon=True
+    ).start()
+
+
+def _write_memory(user_id: str, user_msg: str, coach_response: str):
+    """Background task: analyze conversation and save observations to coach_memory."""
+    try:
+        api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        system = """Analysera detta coachsamtal och identifiera observationer varda att minnas.
+Svara ENBART med ett JSON-array. Inga kommentarer utanfor JSON.
+Om inget ar vart att minnas, svara med tom array: []
+
+[{"category": "behavior|physical|mental|preference", "observation": "kort observation"}]
+
+Kategorier:
+- behavior: beteendemonster (t.ex. "kor alltid for hart pa intervaller")
+- physical: fysiologi (t.ex. "ont i handleden", "svarar bra pa hogvolym sim")
+- mental: psykologi (t.ex. "tvivlar pa sig sjalv", "motiveras av siffror")
+- preference: preferenser (t.ex. "vill ha detaljerade planer", "foredrar morrontraning")
+
+Max 2 observationer. Bara saker varda att komma ihag over tid. Tom array om inget sticker ut."""
+
+        msg = f"Atlet: {user_msg[:300]}\nCoach: {coach_response[:500]}"
+        response = api_client.messages.create(
+            model="claude-haiku-4-20250414",
+            max_tokens=200,
+            system=system,
+            messages=[{"role": "user", "content": msg}],
+        )
+        raw = response.content[0].text.strip()
+        if not raw or raw == "[]":
+            return
+        observations = json.loads(raw)
+        if observations:
+            db.save_memory_observations(user_id, observations)
+            print(f"[memory] Saved {len(observations)} observations for {user_id[:8]}")
+    except Exception as e:
+        print(f"[memory] Error: {e}")
 
 
 # ── Goals ────────────────────────────────────────────────────────
