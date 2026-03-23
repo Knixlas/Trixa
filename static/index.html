@@ -645,69 +645,38 @@ function renderBrief(data) {
   tip.innerHTML = html;
 }
 
-function renderNextSession() {
+let cachedPlanStatus = null;
+
+async function renderNextSession() {
   const el = document.getElementById('upcoming-body');
-  const planMsg = [...chatHistory].reverse().find(m =>
-    m.role === 'assistant' && ['VECKOPLAN','MAN ','Mandag','**Man','**MAN'].some(k => m.content?.includes(k))
-  );
-  if (!planMsg) {
-    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem;padding:0.3rem 0">Be Trixa om en veckoplan!</div>';
-    return;
-  }
-
-  const fullDays = ['Sondag','Mandag','Tisdag','Onsdag','Torsdag','Fredag','Lordag'];
-  const today = new Date();
-  const lines = planMsg.content.split('\n');
-
-  // Find the next non-rest day starting from today
-  for (let offset = 0; offset < 7; offset++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + offset);
-    const searchDay = fullDays[d.getDay()];
-
-    for (let j = 0; j < lines.length; j++) {
-      if (lines[j].toLowerCase().includes(searchDay.toLowerCase())) {
-        const mainLine = lines[j].replace(/\*\*/g,'').replace(/^[-*#]+\s*/, '').trim();
-        // Remove day prefix
-        let desc = mainLine;
-        for (const prefix of [searchDay, searchDay.toUpperCase(), searchDay.substring(0,3), searchDay.substring(0,3).toUpperCase()]) {
-          if (desc.toLowerCase().startsWith(prefix.toLowerCase())) {
-            desc = desc.substring(prefix.length).trim().replace(/^[-:]+\s*/, '');
-          }
-        }
-
-        // Check if it's a rest day
-        if (desc.toLowerCase().includes('vila') || desc.toLowerCase().includes('rest')) {
-          if (offset === 0) {
-            // Today is rest — show it but keep looking for next real session
-            continue;
-          }
-          continue;
-        }
-
-        // Collect detail lines below
-        let details = [];
-        for (let k = j + 1; k < lines.length && k < j + 5; k++) {
-          const l = lines[k].trim();
-          if (!l || fullDays.some(fd => l.toLowerCase().startsWith(fd.toLowerCase()))) break;
-          if (l.startsWith('-') || l.startsWith('*') || l.match(/^\s/)) {
-            details.push(l.replace(/^[-*]\s*/, '').trim());
-          }
-        }
-
-        const label = offset === 0 ? 'Idag' : offset === 1 ? 'Imorgon' : searchDay;
-        let html = `<div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem">${label}</div>`;
-        html += `<div style="font-size:1rem;font-weight:700;margin-bottom:0.3rem">${esc(desc)}</div>`;
-        if (details.length) {
-          html += `<div style="font-size:0.8rem;color:var(--text-dim);line-height:1.5">${details.map(d => esc(d)).join('<br>')}</div>`;
-        }
-        el.innerHTML = html;
-        return;
-      }
+  try {
+    if (!cachedPlanStatus) {
+      const r = await fetch('/api/plan/status', {headers: hdrs()});
+      if (r.ok) cachedPlanStatus = await r.json();
     }
-  }
+    if (!cachedPlanStatus || !cachedPlanStatus.has_plan) {
+      el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem;padding:0.3rem 0">Be Trixa om en veckoplan!</div>';
+      return;
+    }
+    // Find next non-rest session
+    const LABELS = ['Idag','Imorgon'];
+    for (let i = 0; i < cachedPlanStatus.days.length; i++) {
+      const d = cachedPlanStatus.days[i];
+      if (!d.planned || d.planned.toLowerCase().includes('vila')) continue;
+      if (d.actual) continue; // Already done today
 
-  el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Inga kommande pass i planen</div>';
+      const label = i < 2 ? LABELS[i] : d.day;
+      let html = `<div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem">${label}</div>`;
+      html += `<div style="font-size:1rem;font-weight:700;margin-bottom:0.3rem">${esc(d.planned)}</div>`;
+      if (d.details) html += `<div style="font-size:0.8rem;color:var(--text-dim);line-height:1.5">${esc(d.details)}</div>`;
+      if (d.purpose) html += `<div style="font-size:0.75rem;color:var(--accent);margin-top:0.3rem;font-style:italic">${esc(d.purpose)}</div>`;
+      el.innerHTML = html;
+      return;
+    }
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Inga fler pass i planen — be Trixa om fler dagar!</div>';
+  } catch {
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Kunde inte ladda plan</div>';
+  }
 }
 
 async function renderZones() {
@@ -737,10 +706,12 @@ async function renderZones() {
 async function renderWeekPlan() {
   const el = document.getElementById('plan-content');
   try {
-    const r = await fetch('/api/plan/status', {headers: hdrs()});
-    if (!r.ok) throw new Error();
-    const data = await r.json();
-    if (!data.has_plan && (!data.days || !data.days.some(d => d.actual))) {
+    if (!cachedPlanStatus) {
+      const r = await fetch('/api/plan/status', {headers: hdrs()});
+      if (r.ok) cachedPlanStatus = await r.json();
+    }
+    const data = cachedPlanStatus;
+    if (!data || (!data.has_plan && (!data.days || !data.days.some(d => d.actual)))) {
       el.innerHTML = '<div class="plan-empty">Be Trixa om en veckoplan i chatten!</div>';
       return;
     }
@@ -904,9 +875,14 @@ async function sendMessage() {
         showZonesProposal(data.zones_update);
       }
       if (data.goals_update) {
-        cachedGoals = null; // Refresh on next render
+        cachedGoals = null;
         renderGoals();
         appendMsg('assistant', null, null, '<div style="color:var(--accent);font-size:0.85rem">&#x1F3AF; Mal uppdaterade!</div>');
+      }
+      if (data.plan_saved) {
+        cachedPlanStatus = null; // Force refresh
+        renderNextSession();
+        renderWeekPlan();
       }
     }
     renderHome();

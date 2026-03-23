@@ -373,3 +373,45 @@ def save_coach_brief(user_id: str, brief: str, follow_up: str | None = None):
         admin.table("coach_briefs").update(data).eq("id", existing.data[0]["id"]).execute()
     else:
         admin.table("coach_briefs").insert(data).execute()
+
+
+# ── Planned Sessions ────────────────────────────────────────────
+
+def get_planned_sessions(user_id: str, access_token: str, from_date: str, to_date: str) -> list[dict]:
+    client = get_client()
+    client.postgrest.auth(access_token)
+    result = (
+        client.table("planned_sessions")
+        .select("*")
+        .eq("user_id", user_id)
+        .gte("date", from_date)
+        .lte("date", to_date)
+        .order("date")
+        .execute()
+    )
+    return result.data or []
+
+
+def upsert_planned_session(user_id: str, session: dict):
+    """Upsert a single planned session by user_id + date + sport."""
+    admin = get_admin_client()
+    session["user_id"] = user_id
+    session["updated_at"] = datetime.now(timezone.utc).isoformat()
+    existing = (
+        admin.table("planned_sessions")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("date", session["date"])
+        .eq("sport", session.get("sport", ""))
+        .execute()
+    )
+    if existing.data:
+        admin.table("planned_sessions").update(session).eq("id", existing.data[0]["id"]).execute()
+    else:
+        admin.table("planned_sessions").insert(session).execute()
+
+
+def upsert_planned_sessions_batch(user_id: str, sessions: list[dict]):
+    """Upsert multiple planned sessions."""
+    for s in sessions:
+        upsert_planned_session(user_id, s)

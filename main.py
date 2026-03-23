@@ -81,6 +81,36 @@ SET_GOALS_TOOL = {
     },
 }
 
+PLAN_SESSIONS_TOOL = {
+    "name": "plan_training_sessions",
+    "description": (
+        "Spara traningspass i atletens plan. Anvand detta nar atleten GODKANNER en veckoplan "
+        "eller nar atleten ber dig justera planen. Spara ALDRIG utan att atleten bekraftat. "
+        "Presentera forslaget forst, fraga 'Ska jag lagga in det?', och spara forst vid ja. "
+        "Inkludera vilopass. Planera 7-10 dagar framat."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "sessions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "date": {"type": "string", "description": "YYYY-MM-DD"},
+                        "sport": {"type": "string", "description": "Lopning/Cykel/Sim/Styrka/Brick/Vila"},
+                        "title": {"type": "string", "description": "Kort titel, t.ex. 'Lop 50min Z2' eller 'Vila'"},
+                        "details": {"type": "string", "description": "Zoninfo, intervaller, puls/watt-granser"},
+                        "purpose": {"type": "string", "description": "Kort syfte, t.ex. 'Bygga aerob bas'"},
+                    },
+                    "required": ["date", "sport", "title"],
+                },
+            },
+        },
+        "required": ["sessions"],
+    },
+}
+
 UPDATE_ZONES_TOOL = {
     "name": "update_athlete_zones",
     "description": (
@@ -133,7 +163,8 @@ WORKOUT_TOOL = {
 
 
 def _build_system_prompt(profile: dict | None, activities: list[dict] | None = None,
-                         coach_memories: list[dict] | None = None) -> str:
+                         coach_memories: list[dict] | None = None,
+                         current_plan: list[dict] | None = None) -> str:
     template = SYSTEM_PROMPT_FILE.read_text(encoding="utf-8")
     now = datetime.now()
     template = (
@@ -215,6 +246,19 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
         if zone_lines:
             template += "\n\n## Atletens nyckeltal\n" + "\n".join(zone_lines)
             template += "\nAnvand dessa varden for att berakna exakta zoner i alla pass."
+
+    # --- Inject current training plan ---
+    if current_plan:
+        plan_lines = []
+        for s in current_plan:
+            line = f"- {s.get('date','')}: {s.get('title','')} ({s.get('sport','')})"
+            if s.get("details"):
+                line += f" — {s['details']}"
+            plan_lines.append(line)
+        if plan_lines:
+            template += "\n\n## Aktuell traningsplan (kommande 10 dagar)\n"
+            template += "Denna plan ar SATT och godkand av atleten. Andra den INTE utan att fraga.\n"
+            template += "\n".join(plan_lines)
 
     # --- Inject coach memory (relational observations) ---
     if coach_memories:
@@ -346,7 +390,7 @@ async def chat(req: ChatRequest, request: Request):
     except Exception:
         pass
 
-    # Build system prompt from profile + activities + coach memory
+    # Build system prompt from profile + activities + coach memory + plan
     profile = db.get_profile(uid, token)
     try:
         activities = db.get_recent_strava_activities(uid, token, days=60)
@@ -356,7 +400,15 @@ async def chat(req: ChatRequest, request: Request):
         coach_memories = db.get_coach_memories(uid, token)
     except Exception:
         coach_memories = None
-    system_prompt = _build_system_prompt(profile, activities, coach_memories)
+    # Get current plan for next 10 days
+    current_plan = None
+    try:
+        from_d = datetime.now().strftime("%Y-%m-%d")
+        to_d = (datetime.now() + timedelta(days=10)).strftime("%Y-%m-%d")
+        current_plan = db.get_planned_sessions(uid, token, from_d, to_d)
+    except Exception:
+        pass
+    system_prompt = _build_system_prompt(profile, activities, coach_memories, current_plan)
 
     # Prepare messages (strip _images from history to avoid sending base64 twice)
     clean = []
@@ -382,7 +434,7 @@ async def chat(req: ChatRequest, request: Request):
         clean.append({"role": "user", "content": req.message})
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    tools = [WORKOUT_TOOL, UPDATE_ZONES_TOOL, SET_GOALS_TOOL] if can_use_feature(tier, "workout_export") else None
+    tools = [WORKOUT_TOOL, PLAN_SESSIONS_TOOL, UPDATE_ZONES_TOOL, SET_GOALS_TOOL] if can_use_feature(tier, "workout_export") else None
 
     # Non-streaming when tools enabled (to handle tool_use blocks)
     if tools:
@@ -394,6 +446,7 @@ async def chat(req: ChatRequest, request: Request):
         workout_data = None
         zones_update = None
         goals_update = None
+        plan_saved = False
         for block in response_obj.content:
             if block.type == "text":
                 text_parts.append(block.text)
@@ -403,7 +456,6 @@ async def chat(req: ChatRequest, request: Request):
                 zones_update = block.input
             elif block.type == "tool_use" and block.name == "set_athlete_goals":
                 goals_update = block.input
-                # Auto-save goals (Trixa and athlete agreed)
                 try:
                     fields = {k: v for k, v in goals_update.items() if v}
                     if fields:
@@ -411,6 +463,13 @@ async def chat(req: ChatRequest, request: Request):
                         db.update_profile(uid, token, fields)
                 except Exception as e:
                     print(f"Goals save error: {e}")
+            elif block.type == "tool_use" and block.name == "plan_training_sessions":
+                try:
+                    db.upsert_planned_sessions_batch(uid, block.input.get("sessions", []))
+                    plan_saved = True
+                    print(f"[plan] Saved {len(block.input.get('sessions', []))} sessions")
+                except Exception as e:
+                    print(f"Plan save error: {e}")
 
         response_text = "\n".join(text_parts)
         _save_conv(uid, token, req.history, req.message, response_text)
@@ -421,6 +480,8 @@ async def chat(req: ChatRequest, request: Request):
             result["zones_update"] = zones_update
         if goals_update:
             result["goals_update"] = goals_update
+        if plan_saved:
+            result["plan_saved"] = True
         return result
 
     # Streaming (no tools)
@@ -516,60 +577,49 @@ async def save_zones(request: Request):
 
 @app.get("/api/plan/status")
 async def plan_status(request: Request):
-    """Return this week's plan with Strava activity overlay + color coding."""
+    """Return rolling 7-day plan from planned_sessions + Strava overlay."""
     uid, token = _get_auth(request)
 
-    # Get conversation to find latest plan
-    conv = db.get_conversation(uid, token)
-    plan_text = None
-    if conv:
-        for msg in reversed(conv.get("messages", [])):
-            if msg.get("role") == "assistant" and any(
-                k in (msg.get("content") or "")
-                for k in ["VECKOPLAN", "MAN ", "Mandag", "**Man", "**MAN"]
-            ):
-                plan_text = msg["content"]
-                break
+    from datetime import datetime, timedelta
+    DAYS_SHORT = ["Man", "Tis", "Ons", "Tor", "Fre", "Lor", "Son"]
+    today = datetime.now()
+    from_date = today.strftime("%Y-%m-%d")
+    to_date = (today + timedelta(days=6)).strftime("%Y-%m-%d")
 
-    # Get this week's Strava activities
+    # Get planned sessions from DB
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=7)
+        planned = db.get_planned_sessions(uid, token, from_date, to_date)
+    except Exception:
+        planned = []
+
+    # Get Strava activities for today (in case already trained)
+    try:
+        activities = db.get_recent_strava_activities(uid, token, days=1)
     except Exception:
         activities = []
 
-    # Build day-by-day status — rolling 7 days from today
-    from datetime import datetime, timedelta
-    DAYS_SV = ["Mandag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lordag", "Sondag"]
-    DAYS_SHORT = ["Man", "Tis", "Ons", "Tor", "Fre", "Lor", "Son"]
-    today = datetime.now()
-
+    # Build day-by-day
     days = []
+    has_plan = len(planned) > 0
     for i in range(7):
         d = today + timedelta(days=i)
         date_str = d.strftime("%Y-%m-%d")
-        weekday_idx = d.weekday()
-        day_name = DAYS_SV[weekday_idx]
-        day_short = DAYS_SHORT[weekday_idx]
-        is_past = False  # rolling window starts today
+        day_short = DAYS_SHORT[d.weekday()]
         is_today = (i == 0)
 
-        # Find planned activity for this day
-        planned = ""
-        if plan_text:
-            for line in plan_text.split("\n"):
-                lower = line.lower().replace("*", "")
-                if day_name.lower() in lower or day_short.lower() in lower.split()[0:1]:
-                    planned = line.replace("**", "").strip()
-                    # Remove the day prefix
-                    for prefix in [day_name, day_short, day_name.upper(), day_short.upper()]:
-                        if planned.lower().startswith(prefix.lower()):
-                            planned = planned[len(prefix):].strip().lstrip("-:").strip()
-                    break
+        # Find planned sessions for this day
+        day_plans = [p for p in planned if p.get("date") == date_str]
+        if day_plans:
+            plan_title = " + ".join(p.get("title", "") for p in day_plans)
+            plan_details = day_plans[0].get("details", "")
+            plan_purpose = day_plans[0].get("purpose", "")
+        else:
+            plan_title = ""
+            plan_details = ""
+            plan_purpose = ""
 
-        # Find actual activities for this day
+        # Find actual activities
         day_activities = [a for a in activities if a.get("date") == date_str]
-
-        # Determine status color
         actual_summary = ""
         if day_activities:
             parts = []
@@ -577,14 +627,13 @@ async def plan_status(request: Request):
                 p = [a.get("type", "")]
                 if a.get("duration_min"): p.append(f"{int(a['duration_min'])}min")
                 if a.get("distance_km"): p.append(f"{a['distance_km']}km")
-                if a.get("avg_hr"): p.append(f"p{a['avg_hr']}")
                 parts.append(" ".join(p))
             actual_summary = " + ".join(parts)
 
-            if planned and ("vila" in planned.lower() or "rest" in planned.lower()):
-                status = "yellow"  # Trained on rest day
-            else:
-                status = "green"  # Did something
+        # Color status
+        if day_activities:
+            is_rest = plan_title and ("vila" in plan_title.lower())
+            status = "yellow" if is_rest else "green"
         elif is_today:
             status = "today"
         else:
@@ -593,13 +642,15 @@ async def plan_status(request: Request):
         days.append({
             "day": day_short,
             "date": date_str,
-            "planned": planned,
+            "planned": plan_title,
+            "details": plan_details,
+            "purpose": plan_purpose,
             "actual": actual_summary,
             "status": status,
             "is_today": is_today,
         })
 
-    return {"days": days, "has_plan": plan_text is not None}
+    return {"days": days, "has_plan": has_plan}
 
 
 # ── Coach Brief (for dashboard) ──────────────────────────────────
