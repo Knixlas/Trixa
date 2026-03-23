@@ -302,7 +302,20 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
     if current_plan:
         plan_lines = []
         for s in current_plan:
-            line = f"- {s.get('date','')}: {s.get('title','')} ({s.get('sport','')})"
+            d = s.get('date', '')
+            weekday = ''
+            try:
+                from datetime import datetime as dt2
+                parsed = dt2.strptime(d, "%Y-%m-%d")
+                weekday = WEEKDAYS_SV[parsed.weekday()]
+                today_str = now.strftime("%Y-%m-%d")
+                if d == today_str:
+                    weekday += " (IDAG)"
+                elif d == (now + timedelta(days=1)).strftime("%Y-%m-%d"):
+                    weekday += " (IMORGON)"
+            except Exception:
+                pass
+            line = f"- {weekday} {d}: {s.get('title','')} ({s.get('sport','')})"
             if s.get("details"):
                 line += f" — {s['details']}"
             plan_lines.append(line)
