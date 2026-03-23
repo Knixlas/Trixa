@@ -81,6 +81,43 @@ SET_GOALS_TOOL = {
     },
 }
 
+LOG_TRAINING_TOOL = {
+    "name": "log_training_session",
+    "description": (
+        "Logga ett traningspass i traningsloggen. Anvand detta nar atleten berattar om ett pass "
+        "de genomfort, skickar en skärmdump fran Garmin/Strava, eller nar du tolkar passdata fran nagon kalla. "
+        "Fyll i sa manga falt som mojligt baserat pa informationen. "
+        "Anvand extra_data for information som inte har ett eget falt (t.ex. kadens, simtag, vattentemperatur). "
+        "Skriv coach_notes med din analys av passet."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "date": {"type": "string", "description": "Datum YYYY-MM-DD"},
+            "sport": {"type": "string", "enum": ["run", "bike", "swim", "strength", "other"]},
+            "title": {"type": "string", "description": "Kort titel, t.ex. 'Troskelintervaller 5x1km'"},
+            "duration_min": {"type": "number"},
+            "distance_km": {"type": "number"},
+            "avg_hr": {"type": "integer"},
+            "max_hr": {"type": "integer"},
+            "avg_power": {"type": "integer"},
+            "normalized_power": {"type": "integer"},
+            "pace": {"type": "string", "description": "T.ex. '5:45/km'"},
+            "tss": {"type": "number"},
+            "rpe": {"type": "integer", "description": "Rate of perceived exertion 1-10"},
+            "feeling": {"type": "string", "description": "Kort: bra, tungt, fantastiskt, slitet"},
+            "notes": {"type": "string", "description": "Atletens egna kommentarer"},
+            "coach_notes": {"type": "string", "description": "Din analys av passet — vad gick bra, vad kan forbattras"},
+            "source": {"type": "string", "enum": ["chat", "garmin_screenshot", "strava_screenshot", "manual"]},
+            "extra_data": {
+                "type": "object",
+                "description": "Ovriga datapunkter som ar relevanta men saknar eget falt. T.ex. {\"cadence\": 180, \"swim_strokes\": 42, \"splits\": [\"5:30\", \"5:25\", \"5:20\"]}",
+            },
+        },
+        "required": ["date", "sport"],
+    },
+}
+
 UPDATE_PROFILE_TOOL = {
     "name": "update_athlete_profile",
     "description": (
@@ -521,7 +558,7 @@ async def chat(req: ChatRequest, request: Request):
         clean.append({"role": "user", "content": req.message})
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    tools = [WORKOUT_TOOL, _get_plan_tool(), UPDATE_ZONES_TOOL, SET_GOALS_TOOL, UPDATE_PROFILE_TOOL] if can_use_feature(tier, "workout_export") else None
+    tools = [WORKOUT_TOOL, _get_plan_tool(), UPDATE_ZONES_TOOL, SET_GOALS_TOOL, UPDATE_PROFILE_TOOL, LOG_TRAINING_TOOL] if can_use_feature(tier, "workout_export") else None
 
     # Non-streaming when tools enabled (to handle tool_use blocks)
     if tools:
@@ -587,6 +624,31 @@ async def chat(req: ChatRequest, request: Request):
                         except Exception as e:
                             tool_result_content = f"Fel: {e}"
                             print(f"Plan save error: {e}")
+                    elif block.name == "log_training_session":
+                        try:
+                            entry = dict(block.input)
+                            entry["user_id"] = uid
+                            # Clean up: remove None values
+                            entry = {k: v for k, v in entry.items() if v is not None}
+                            # Convert extra_data to JSON string if present
+                            import json as json_mod
+                            if "extra_data" in entry and isinstance(entry["extra_data"], dict):
+                                entry["extra_data"] = json_mod.dumps(entry["extra_data"])
+                            admin = db.get_admin_client()
+                            admin.table("training_log").insert(entry).execute()
+                            missing = []
+                            if not entry.get("duration_min"): missing.append("tid")
+                            if not entry.get("distance_km"): missing.append("distans")
+                            if not entry.get("avg_hr"): missing.append("puls")
+                            if not entry.get("rpe"): missing.append("anstrangning (RPE)")
+                            if missing:
+                                tool_result_content = f"Pass loggat! Saknas: {', '.join(missing)} — fraga atleten."
+                            else:
+                                tool_result_content = "Pass loggat med all central data!"
+                            print(f"[training_log] Logged: {entry.get('date')} {entry.get('sport')}")
+                        except Exception as e:
+                            tool_result_content = f"Fel vid loggning: {e}"
+                            print(f"Training log error: {e}")
 
                     tool_results.append({
                         "type": "tool_result",

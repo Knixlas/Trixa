@@ -333,6 +333,24 @@ def get_recent_strava_activities(user_id: str, access_token: str, days: int = 14
     return result.data or []
 
 
+# ── Training Log ────────────────────────────────────────────────
+
+def get_training_log(user_id: str, access_token: str, days: int = 60) -> list[dict]:
+    """Get training log entries (from all sources) for the last N days."""
+    client = get_client()
+    client.postgrest.auth(access_token)
+    since = (date.today() - timedelta(days=days)).isoformat()
+    result = (
+        client.table("training_log")
+        .select("*")
+        .eq("user_id", user_id)
+        .gte("date", since)
+        .order("date", desc=True)
+        .execute()
+    )
+    return result.data or []
+
+
 # ── Coach Memory ────────────────────────────────────────────────
 
 def save_memory_observations(user_id: str, observations: list[dict]):
