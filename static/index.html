@@ -860,6 +860,9 @@ async function sendMessage() {
       const data = await r.json();
       chatHistory.push({role: 'assistant', content: data.text, workout: data.workout});
       appendMsg('assistant', data.text, data.workout);
+      if (data.zones_update) {
+        showZonesProposal(data.zones_update);
+      }
     }
     renderHome();
   } catch (e) {
@@ -867,6 +870,40 @@ async function sendMessage() {
     appendMsg('assistant', 'Anslutningsfel. Forsok igen.');
   }
   document.getElementById('send-btn').disabled = false;
+}
+
+function showZonesProposal(zones) {
+  const c = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  const labels = {ftp:'FTP', css_per_100m:'CSS', threshold_pace:'Troskelfart', threshold_hr:'Troskelpuls', max_hr:'Max puls'};
+  const units = {ftp:'W', css_per_100m:'/100m', threshold_pace:'/km', threshold_hr:'bpm', max_hr:'bpm'};
+  let rows = Object.entries(zones).map(([k,v]) => `${labels[k]||k}: <strong>${v}${units[k]||''}</strong>`).join('<br>');
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:0.7rem;margin-top:0.3rem">
+    <div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem">FORESLAGNA NYCKELTAL</div>
+    <div style="font-size:0.85rem;margin-bottom:0.5rem">${rows}</div>
+    <div style="display:flex;gap:0.5rem">
+      <button class="btn btn-sm" onclick="applyZonesUpdate(${esc(JSON.stringify(JSON.stringify(zones)))})">Uppdatera</button>
+      <button class="btn btn-secondary btn-sm" onclick="this.parentElement.parentElement.parentElement.remove()">Behall gamla</button>
+    </div>
+  </div>`;
+  c.appendChild(div);
+  c.scrollTop = c.scrollHeight;
+}
+
+async function applyZonesUpdate(zonesJson) {
+  const zones = JSON.parse(zonesJson);
+  try {
+    const r = await fetch('/api/athlete/zones', {method:'POST', headers:hdrs(), body:JSON.stringify(zones)});
+    if (r.ok) {
+      appendMsg('assistant', 'Nyckeltal uppdaterade! Dina nya zoner ar aktiva.');
+      renderZones();
+    } else {
+      appendMsg('assistant', 'Kunde inte uppdatera nyckeltal.');
+    }
+  } catch (e) {
+    appendMsg('assistant', 'Fel: ' + e.message);
+  }
 }
 
 async function pushWorkout(w) {

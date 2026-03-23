@@ -64,6 +64,24 @@ class DiscountRequest(BaseModel):
 
 WEEKDAYS_SV = ["mandag", "tisdag", "onsdag", "torsdag", "fredag", "lordag", "sondag"]
 
+UPDATE_ZONES_TOOL = {
+    "name": "update_athlete_zones",
+    "description": (
+        "Uppdatera atletens nyckeltal/zoner. Anvand detta nar du foreslar justerade "
+        "troskelvarden baserat pa traningsdata. Skicka BARA de varden du vill andra."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "ftp": {"type": "integer", "description": "Ny FTP i watt"},
+            "css_per_100m": {"type": "string", "description": "Ny CSS, t.ex. '1:42'"},
+            "threshold_pace": {"type": "string", "description": "Ny troskelfart, t.ex. '4:20'"},
+            "threshold_hr": {"type": "integer", "description": "Ny troskelpuls i bpm"},
+            "max_hr": {"type": "integer", "description": "Ny max puls i bpm"},
+        },
+    },
+}
+
 WORKOUT_TOOL = {
     "name": "create_workout_file",
     "description": (
@@ -332,7 +350,7 @@ async def chat(req: ChatRequest, request: Request):
         clean.append({"role": "user", "content": req.message})
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    tools = [WORKOUT_TOOL] if can_use_feature(tier, "workout_export") else None
+    tools = [WORKOUT_TOOL, UPDATE_ZONES_TOOL] if can_use_feature(tier, "workout_export") else None
 
     # Non-streaming when tools enabled (to handle tool_use blocks)
     if tools:
@@ -342,17 +360,22 @@ async def chat(req: ChatRequest, request: Request):
         )
         text_parts = []
         workout_data = None
+        zones_update = None
         for block in response_obj.content:
             if block.type == "text":
                 text_parts.append(block.text)
             elif block.type == "tool_use" and block.name == "create_workout_file":
                 workout_data = block.input
+            elif block.type == "tool_use" and block.name == "update_athlete_zones":
+                zones_update = block.input
 
         response_text = "\n".join(text_parts)
         _save_conv(uid, token, req.history, req.message, response_text)
         result = {"text": response_text}
         if workout_data:
             result["workout"] = workout_data
+        if zones_update:
+            result["zones_update"] = zones_update
         return result
 
     # Streaming (no tools)
