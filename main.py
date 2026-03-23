@@ -320,7 +320,14 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
             mem_lines.append(f"- [{m.get('category','')}] {m.get('observation','')} (sett {seen}x, konfidens {conf:.0%})")
         if mem_lines:
             template += "\n\n## Coachens minnesanteckningar om atleten\n"
-            template += "Dessa ar saker du observerat over tid. Anvand dem aktivt i dina svar.\n"
+            template += """Dessa ar saker du VET om atleten. Du MASTE anvanda dem:
+- Fraga ALDRIG om nagot som redan star har. Du VET det redan.
+- Referera till det du vet: "Med tanke pa din handled..." inte "Har du nagon skada?"
+- Om atleten berattat om energidipp — ta hansyn till det i planeringen utan att fraga igen.
+- Om du vet preferenser — anvand dem direkt i forslag.
+- Ny information fran samtal ADDERAS till minnet, den ERSATTER inte.
+
+"""
             template += "\n".join(mem_lines)
 
     return template
@@ -634,21 +641,26 @@ def _write_memory(user_id: str, user_msg: str, coach_response: str):
     """Background task: analyze conversation and save observations to coach_memory."""
     try:
         api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-        system = """Analysera detta coachsamtal och identifiera observationer varda att minnas.
+        system = """Analysera detta coachsamtal och spara ALLA viktiga fakta om atleten.
 Svara ENBART med ett JSON-array. Inga kommentarer utanfor JSON.
 Om inget ar vart att minnas, svara med tom array: []
 
-[{"category": "behavior|physical|mental|preference", "observation": "kort observation"}]
+[{"category": "behavior|physical|mental|preference|fact", "observation": "specifik observation"}]
 
 Kategorier:
-- behavior: beteendemonster (t.ex. "kor alltid for hart pa intervaller")
-- physical: fysiologi (t.ex. "ont i handleden", "svarar bra pa hogvolym sim")
-- mental: psykologi (t.ex. "tvivlar pa sig sjalv", "motiveras av siffror")
-- preference: preferenser (t.ex. "vill ha detaljerade planer", "foredrar morrontraning")
+- fact: konkreta fakta ("har ont i handleden", "jobbar som IT-konsult", "har barn", "bor i Stockholm")
+- physical: fysiologi ("ont i vanster handled sedan 2 veckor", "kanns tung i benen pa morgonen")
+- behavior: beteendemonster ("kor alltid for hart pa intervaller", "skippar ofta fredagspass")
+- mental: psykologi ("far energidipp pa eftermiddagen", "har hyperfokus-perioder", "motiveras av siffror")
+- preference: preferenser ("foredrar morrontraning", "gillar 6x3min framfor 4x4min", "vill ha korta svar")
 
-Max 2 observationer. Bara saker varda att komma ihag over tid. Tom array om inget sticker ut."""
+VIKTIGT:
+- Spara SPECIFIKA detaljer, inte vaga sammanfattningar
+- "ont i vanster handled sedan mars 2026" ar battre an "har en skada"
+- "far energidipp kl 14-15 varje dag" ar battre an "trott pa eftermiddagen"
+- Max 3 observationer per samtal. Tom array om inget sticker ut."""
 
-        msg = f"Atlet: {user_msg[:300]}\nCoach: {coach_response[:500]}"
+        msg = f"Atlet: {user_msg[:800]}\nCoach: {coach_response[:800]}"
         response = api_client.messages.create(
             model="claude-haiku-4-20250414",
             max_tokens=200,
