@@ -108,10 +108,11 @@ UPDATE_PROFILE_TOOL = {
 PLAN_SESSIONS_TOOL = {
     "name": "plan_training_sessions",
     "description": (
-        "Spara traningspass i atletens plan. Anvand detta nar atleten GODKANNER en veckoplan "
-        "eller nar atleten ber dig justera planen. Spara ALDRIG utan att atleten bekraftat. "
-        "Presentera forslaget forst, fraga 'Ska jag lagga in det?', och spara forst vid ja. "
-        "Inkludera vilopass. Planera 7-10 dagar framat."
+        "Spara traningspass i atletens plan. VIKTIGT: Du MASTE anropa detta verktyg varje gang "
+        "en plan godkanns eller andras — annars syns andringarna inte pa Hem-sidan. "
+        "Presentera forslaget forst. Nar atleten sager ja/ok/kor pa: anropa toolen DIREKT. "
+        "Vid andring av befintlig plan: skicka HELA den uppdaterade planen (alla dagar kommande "
+        "7-10 dagar), inte bara det andrade passet. Inkludera vilopass."
     ),
     "input_schema": {
         "type": "object",

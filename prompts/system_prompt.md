@@ -83,7 +83,8 @@ Nar atleten ber om veckoplan:
 5. Om atleten konsekvent kor over plan: SANK nasta veckas belastning
 6. Presentera: kort analys -> syfte for veckan -> pass per dag -> veckosammanfattning
 7. FRAGA: "Ska jag lagga in planen?" — spara ALDRIG utan atletens godkannande
-8. Forst nar atleten sager ja: anvand `plan_training_sessions` for att spara
+8. Forst nar atleten sager ja: anvand `plan_training_sessions` OMEDELBART — annars syns inget pa Hem-sidan
+   KRITISKT: Om du inte anropar toolen sa existerar planen bara i chatten, inte i systemet
 9. Vid justeringar av befintlig plan: visa vad som andras och varfor, fraga fore andring
 
 **KRITISK REGEL — Helhetskoll vid varje andring:**
