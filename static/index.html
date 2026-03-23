@@ -428,6 +428,23 @@ input:focus { border-color: var(--accent); }
     </div>
 
     <div class="profile-section">
+      <h3>Strava</h3>
+      <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:0.5rem">
+        Skapa en app pa <a href="https://www.strava.com/settings/api" target="_blank" style="color:var(--accent)">strava.com/settings/api</a>.
+        Ange <b>trixa.up.railway.app</b> som callback-doman.
+      </div>
+      <div class="profile-input">
+        <label>Client ID</label>
+        <input type="text" id="strava-cid" placeholder="t.ex. 212075">
+      </div>
+      <div class="profile-input">
+        <label>Client Secret</label>
+        <input type="password" id="strava-secret">
+      </div>
+      <button class="btn btn-sm" onclick="saveStravaCreds()">Spara</button>
+    </div>
+
+    <div class="profile-section">
       <h3>Intervals.icu</h3>
       <div class="profile-input">
         <label>API-nyckel</label>
@@ -1082,6 +1099,9 @@ async function renderProfile() {
     const r = await fetch('/api/profile', {headers: hdrs()});
     const d = await r.json();
     if (d.profile) {
+      // Strava credentials
+      document.getElementById('strava-cid').value = d.profile.strava_client_id || '';
+      document.getElementById('strava-secret').value = d.profile.strava_client_secret ? '********' : '';
       // Intervals
       document.getElementById('icu-key').value = d.profile.intervals_api_key || '';
       document.getElementById('icu-athlete').value = d.profile.intervals_athlete_id || '';
@@ -1145,6 +1165,16 @@ async function saveZones() {
     const r = await fetch('/api/athlete/zones', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
     alert(r.ok ? 'Nyckeltal sparade!' : 'Kunde inte spara');
     if (r.ok) { cachedBrief = null; renderZones(); }
+  } catch (e) { alert('Fel: ' + e.message); }
+}
+
+async function saveStravaCreds() {
+  const cid = document.getElementById('strava-cid').value.trim();
+  const secret = document.getElementById('strava-secret').value.trim();
+  if (!cid || !secret) { alert('Fyll i bade Client ID och Client Secret'); return; }
+  try {
+    const r = await fetch('/api/strava/save-credentials', {method:'POST', headers:hdrs(), body:JSON.stringify({client_id:cid, client_secret:secret})});
+    alert(r.ok ? 'Strava-nycklar sparade! Klicka nu Koppla Strava pa Hem-sidan.' : 'Kunde inte spara');
   } catch (e) { alert('Fel: ' + e.message); }
 }
 

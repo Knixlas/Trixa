@@ -36,10 +36,15 @@ SPORT_MAP = {
 
 # ── OAuth ────────────────────────────────────────────────────────
 
-def get_authorization_url(redirect_uri: str, state: str) -> str:
-    """Build Strava OAuth authorization URL."""
+def get_authorization_url(redirect_uri: str, state: str,
+                          client_id: str | None = None) -> str:
+    """Build Strava OAuth authorization URL.
+
+    Uses user-provided client_id if available, falls back to env var.
+    """
+    cid = client_id or os.environ.get("STRAVA_CLIENT_ID", "")
     params = {
-        "client_id": os.environ.get("STRAVA_CLIENT_ID", ""),
+        "client_id": cid,
         "redirect_uri": redirect_uri,
         "response_type": "code",
         "approval_prompt": "auto",
@@ -49,11 +54,18 @@ def get_authorization_url(redirect_uri: str, state: str) -> str:
     return f"{STRAVA_AUTH_URL}?{urlencode(params)}"
 
 
-def exchange_code(code: str, redirect_uri: str) -> dict:
-    """Exchange authorization code for tokens."""
+def exchange_code(code: str, redirect_uri: str,
+                  client_id: str | None = None,
+                  client_secret: str | None = None) -> dict:
+    """Exchange authorization code for tokens.
+
+    Uses user-provided credentials if available, falls back to env vars.
+    """
+    cid = client_id or os.environ.get("STRAVA_CLIENT_ID", "")
+    secret = client_secret or os.environ.get("STRAVA_CLIENT_SECRET", "")
     resp = requests.post(STRAVA_TOKEN_URL, data={
-        "client_id": os.environ.get("STRAVA_CLIENT_ID", ""),
-        "client_secret": os.environ.get("STRAVA_CLIENT_SECRET", ""),
+        "client_id": cid,
+        "client_secret": secret,
         "code": code,
         "grant_type": "authorization_code",
     }, timeout=15)
@@ -61,11 +73,18 @@ def exchange_code(code: str, redirect_uri: str) -> dict:
     return resp.json()
 
 
-def refresh_access_token(refresh_token: str) -> dict:
-    """Refresh an expired access token."""
+def refresh_access_token(refresh_token: str,
+                         client_id: str | None = None,
+                         client_secret: str | None = None) -> dict:
+    """Refresh an expired access token.
+
+    Uses user-provided credentials if available, falls back to env vars.
+    """
+    cid = client_id or os.environ.get("STRAVA_CLIENT_ID", "")
+    secret = client_secret or os.environ.get("STRAVA_CLIENT_SECRET", "")
     resp = requests.post(STRAVA_TOKEN_URL, data={
-        "client_id": os.environ.get("STRAVA_CLIENT_ID", ""),
-        "client_secret": os.environ.get("STRAVA_CLIENT_SECRET", ""),
+        "client_id": cid,
+        "client_secret": secret,
         "refresh_token": refresh_token,
         "grant_type": "refresh_token",
     }, timeout=15)
@@ -73,12 +92,19 @@ def refresh_access_token(refresh_token: str) -> dict:
     return resp.json()
 
 
-def ensure_fresh_token(tokens: dict) -> dict:
+def ensure_fresh_token(tokens: dict,
+                       client_id: str | None = None,
+                       client_secret: str | None = None) -> dict:
     """Check if tokens are expired, refresh if needed.
-    Returns updated tokens dict (may have new access_token/refresh_token).
+
+    Uses user-provided credentials for refresh.
     """
     if tokens.get("expires_at", 0) < time.time() + 60:
-        refreshed = refresh_access_token(tokens["refresh_token"])
+        refreshed = refresh_access_token(
+            tokens["refresh_token"],
+            client_id=client_id,
+            client_secret=client_secret,
+        )
         tokens["access_token"] = refreshed["access_token"]
         tokens["refresh_token"] = refreshed["refresh_token"]
         tokens["expires_at"] = refreshed["expires_at"]

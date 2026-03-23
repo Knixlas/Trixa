@@ -105,36 +105,45 @@ UPDATE_PROFILE_TOOL = {
     },
 }
 
-PLAN_SESSIONS_TOOL = {
-    "name": "plan_training_sessions",
-    "description": (
-        "Spara traningspass i atletens plan. VIKTIGT: Du MASTE anropa detta verktyg varje gang "
-        "en plan godkanns eller andras — annars syns andringarna inte pa Hem-sidan. "
-        "Presentera forslaget forst. Nar atleten sager ja/ok/kor pa: anropa toolen DIREKT. "
-        "Vid andring av befintlig plan: skicka HELA den uppdaterade planen (alla dagar kommande "
-        "7-10 dagar), inte bara det andrade passet. Inkludera vilopass."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "sessions": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "date": {"type": "string", "description": "YYYY-MM-DD"},
-                        "sport": {"type": "string", "description": "Lopning/Cykel/Sim/Styrka/Brick/Vila"},
-                        "title": {"type": "string", "description": "Kort titel, t.ex. 'Lop 50min Z2' eller 'Vila'"},
-                        "details": {"type": "string", "description": "Zoninfo, intervaller, puls/watt-granser"},
-                        "purpose": {"type": "string", "description": "Kort syfte, t.ex. 'Bygga aerob bas'"},
+def _get_plan_tool():
+    """Build plan tool with today's date so Trixa knows where she is."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    weekday = ["mandag","tisdag","onsdag","torsdag","fredag","lordag","sondag"][datetime.now().weekday()]
+    return {
+        "name": "plan_training_sessions",
+        "description": (
+            f"Spara traningspass i atletens plan. Idag ar {weekday} {today}. "
+            "KRITISKT: Datum i sessions MASTE vara exakt YYYY-MM-DD och matcha "
+            "EXAKT de dagar du namner i texten. Om du sager 'tisdag 25/3' MASTE date vara "
+            f"'2026-03-25' (aret ar {datetime.now().year}). "
+            "Dubbelkolla att varje datum stammer med veckodagen. "
+            "Du MASTE anropa detta verktyg varje gang en plan godkanns eller andras. "
+            "Vid andring: skicka HELA den uppdaterade planen (alla dagar kommande 7-10 dagar), "
+            "inte bara det andrade passet. Inkludera vilopass (sport='Vila', title='Vila'). "
+            "Vad du sparar ar exakt vad som visas pa Hem-sidan — texten i 'title' "
+            "ar det atleten ser. Se till att title matchar det du sager i chatten."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "date": {"type": "string", "description": f"YYYY-MM-DD. Idag = {today}"},
+                            "sport": {"type": "string", "description": "Lopning/Cykel/Sim/Styrka/Brick/Vila"},
+                            "title": {"type": "string", "description": "Exakt det som visas pa Hem-sidan. T.ex. 'Styrka 30min + Lop 35min Z2' eller 'Vila'"},
+                            "details": {"type": "string", "description": "Zoninfo, intervaller, puls/watt-granser"},
+                            "purpose": {"type": "string", "description": "Kort syfte, t.ex. 'Bygga aerob bas'"},
+                        },
+                        "required": ["date", "sport", "title"],
                     },
-                    "required": ["date", "sport", "title"],
                 },
             },
+            "required": ["sessions"],
         },
-        "required": ["sessions"],
-    },
-}
+    }
 
 UPDATE_ZONES_TOOL = {
     "name": "update_athlete_zones",
@@ -475,7 +484,7 @@ async def chat(req: ChatRequest, request: Request):
         clean.append({"role": "user", "content": req.message})
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    tools = [WORKOUT_TOOL, PLAN_SESSIONS_TOOL, UPDATE_ZONES_TOOL, SET_GOALS_TOOL, UPDATE_PROFILE_TOOL] if can_use_feature(tier, "workout_export") else None
+    tools = [WORKOUT_TOOL, _get_plan_tool(), UPDATE_ZONES_TOOL, SET_GOALS_TOOL, UPDATE_PROFILE_TOOL] if can_use_feature(tier, "workout_export") else None
 
     # Non-streaming when tools enabled (to handle tool_use blocks)
     if tools:
@@ -1098,27 +1107,43 @@ async def clear_conversation(request: Request):
     return {"ok": True}
 
 
-# ── Strava ───────────────────────────────────────────────────────
+# ── Strava (per-user credentials) ────────────────────────────────
 
-@app.get("/api/strava/status")
-async def strava_debug():
-    """Temporary debug endpoint — remove after verification."""
-    cid = os.environ.get("STRAVA_CLIENT_ID", "<NOT SET>")
-    has_secret = bool(os.environ.get("STRAVA_CLIENT_SECRET"))
-    has_state = bool(os.environ.get("STRAVA_STATE_SECRET"))
-    return {"client_id": cid, "has_secret": has_secret, "has_state": has_state}
+def _get_user_strava_creds(uid: str, token: str) -> tuple[str, str]:
+    """Get user's own Strava client_id and client_secret from profile."""
+    profile = db.get_profile(uid, token)
+    cid = (profile or {}).get("strava_client_id", "") or ""
+    secret = (profile or {}).get("strava_client_secret", "") or ""
+    return cid, secret
+
+
+@app.post("/api/strava/save-credentials")
+async def strava_save_credentials(request: Request):
+    """Save user's own Strava API credentials to profile."""
+    uid, token = _get_auth(request)
+    body = await request.json()
+    cid = body.get("client_id", "").strip()
+    secret = body.get("client_secret", "").strip()
+    if not cid or not secret:
+        raise HTTPException(400, "Client ID och Client Secret kravs")
+    db.update_profile(uid, token, {
+        "strava_client_id": cid,
+        "strava_client_secret": secret,
+    })
+    return {"ok": True}
 
 
 @app.get("/api/strava/connect")
 async def strava_connect(request: Request):
-    uid, _ = _get_auth(request)
+    uid, token = _get_auth(request)
+    cid, secret = _get_user_strava_creds(uid, token)
+    if not cid or not secret:
+        raise HTTPException(400, "Lagg in dina Strava API-nycklar under Profil forst")
+
     from integrations.strava import get_authorization_url, sign_state
-    redirect_uri = os.environ.get(
-        "STRAVA_REDIRECT_URI",
-        str(request.base_url).rstrip("/") + "/api/strava/callback",
-    )
+    redirect_uri = str(request.base_url).rstrip("/") + "/api/strava/callback"
     state = sign_state(uid)
-    url = get_authorization_url(redirect_uri, state)
+    url = get_authorization_url(redirect_uri, state, client_id=cid)
     return {"url": url}
 
 
@@ -1133,13 +1158,19 @@ async def strava_callback(request: Request, code: str = "", state: str = "", err
     if not user_id:
         return RedirectResponse("/?strava=error")
 
-    redirect_uri = os.environ.get(
-        "STRAVA_REDIRECT_URI",
-        str(request.base_url).rstrip("/") + "/api/strava/callback",
-    )
+    # Get user's own Strava credentials
+    admin = db.get_admin_client()
+    profile_row = admin.table("profiles").select("strava_client_id, strava_client_secret").eq("id", user_id).execute()
+    cid = ""
+    secret = ""
+    if profile_row.data:
+        cid = profile_row.data[0].get("strava_client_id", "") or ""
+        secret = profile_row.data[0].get("strava_client_secret", "") or ""
+
+    redirect_uri = str(request.base_url).rstrip("/") + "/api/strava/callback"
 
     try:
-        tokens = exchange_code(code, redirect_uri)
+        tokens = exchange_code(code, redirect_uri, client_id=cid, client_secret=secret)
         db.save_strava_tokens(user_id, tokens)
 
         # Initial sync — 12 months of history for new athletes
@@ -1162,12 +1193,12 @@ async def strava_sync(request: Request):
     if not strava_tokens:
         raise HTTPException(400, "Strava ej kopplat")
 
+    cid, secret = _get_user_strava_creds(uid, token)
     from integrations.strava import ensure_fresh_token, get_activities, parse_activity
     import time, traceback
 
     try:
-        # Refresh tokens if needed
-        strava_tokens = ensure_fresh_token(strava_tokens)
+        strava_tokens = ensure_fresh_token(strava_tokens, client_id=cid, client_secret=secret)
         if strava_tokens.get("_refreshed"):
             db.update_strava_tokens(uid, strava_tokens)
 
