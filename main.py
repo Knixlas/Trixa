@@ -440,21 +440,21 @@ async def plan_status(request: Request):
     except Exception:
         activities = []
 
-    # Build day-by-day status
+    # Build day-by-day status — rolling 7 days from today
     from datetime import datetime, timedelta
     DAYS_SV = ["Mandag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lordag", "Sondag"]
     DAYS_SHORT = ["Man", "Tis", "Ons", "Tor", "Fre", "Lor", "Son"]
     today = datetime.now()
-    monday = today - timedelta(days=today.weekday())
 
     days = []
     for i in range(7):
-        d = monday + timedelta(days=i)
+        d = today + timedelta(days=i)
         date_str = d.strftime("%Y-%m-%d")
-        day_name = DAYS_SV[i]
-        day_short = DAYS_SHORT[i]
-        is_past = d.date() < today.date()
-        is_today = d.date() == today.date()
+        weekday_idx = d.weekday()
+        day_name = DAYS_SV[weekday_idx]
+        day_short = DAYS_SHORT[weekday_idx]
+        is_past = False  # rolling window starts today
+        is_today = (i == 0)
 
         # Find planned activity for this day
         planned = ""
@@ -473,7 +473,6 @@ async def plan_status(request: Request):
         day_activities = [a for a in activities if a.get("date") == date_str]
 
         # Determine status color
-        status = "future"  # gray
         actual_summary = ""
         if day_activities:
             parts = []
@@ -485,18 +484,14 @@ async def plan_status(request: Request):
                 parts.append(" ".join(p))
             actual_summary = " + ".join(parts)
 
-            if not planned or "vila" in planned.lower() or "rest" in planned.lower():
-                # Trained on a rest day — yellow
-                status = "yellow" if planned and ("vila" in planned.lower()) else "green"
+            if planned and ("vila" in planned.lower() or "rest" in planned.lower()):
+                status = "yellow"  # Trained on rest day
             else:
-                status = "green"  # Did something on a planned day
-        elif is_past:
-            if planned and "vila" not in planned.lower() and "rest" not in planned.lower():
-                status = "red"  # Missed a planned workout
-            else:
-                status = "green"  # Rest day, correctly rested
+                status = "green"  # Did something
         elif is_today:
             status = "today"
+        else:
+            status = "future"
 
         days.append({
             "day": day_short,
