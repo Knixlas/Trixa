@@ -332,6 +332,131 @@ def _save_conv(uid, token, history, message, response):
         pass
 
 
+# ── Athlete Zones ────────────────────────────────────────────────
+
+@app.get("/api/athlete/zones")
+async def get_zones(request: Request):
+    uid, token = _get_auth(request)
+    profile = db.get_profile(uid, token)
+    if not profile:
+        return {"zones": None}
+    return {"zones": {
+        "ftp": profile.get("ftp"),
+        "css_per_100m": profile.get("css_per_100m"),
+        "threshold_pace": profile.get("threshold_pace"),
+        "threshold_hr": profile.get("threshold_hr"),
+        "max_hr": profile.get("max_hr"),
+    }}
+
+
+@app.post("/api/athlete/zones")
+async def save_zones(request: Request):
+    uid, token = _get_auth(request)
+    body = await request.json()
+    fields = {}
+    for k in ("ftp", "css_per_100m", "threshold_pace", "threshold_hr", "max_hr"):
+        if k in body and body[k] is not None:
+            fields[k] = body[k]
+    if fields:
+        db.update_profile(uid, token, fields)
+    return {"ok": True}
+
+
+# ── Weekly Plan Status ───────────────────────────────────────────
+
+@app.get("/api/plan/status")
+async def plan_status(request: Request):
+    """Return this week's plan with Strava activity overlay + color coding."""
+    uid, token = _get_auth(request)
+
+    # Get conversation to find latest plan
+    conv = db.get_conversation(uid, token)
+    plan_text = None
+    if conv:
+        for msg in reversed(conv.get("messages", [])):
+            if msg.get("role") == "assistant" and any(
+                k in (msg.get("content") or "")
+                for k in ["VECKOPLAN", "MAN ", "Mandag", "**Man", "**MAN"]
+            ):
+                plan_text = msg["content"]
+                break
+
+    # Get this week's Strava activities
+    try:
+        activities = db.get_recent_strava_activities(uid, token, days=7)
+    except Exception:
+        activities = []
+
+    # Build day-by-day status
+    from datetime import datetime, timedelta
+    DAYS_SV = ["Mandag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lordag", "Sondag"]
+    DAYS_SHORT = ["Man", "Tis", "Ons", "Tor", "Fre", "Lor", "Son"]
+    today = datetime.now()
+    monday = today - timedelta(days=today.weekday())
+
+    days = []
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        date_str = d.strftime("%Y-%m-%d")
+        day_name = DAYS_SV[i]
+        day_short = DAYS_SHORT[i]
+        is_past = d.date() < today.date()
+        is_today = d.date() == today.date()
+
+        # Find planned activity for this day
+        planned = ""
+        if plan_text:
+            for line in plan_text.split("\n"):
+                lower = line.lower().replace("*", "")
+                if day_name.lower() in lower or day_short.lower() in lower.split()[0:1]:
+                    planned = line.replace("**", "").strip()
+                    # Remove the day prefix
+                    for prefix in [day_name, day_short, day_name.upper(), day_short.upper()]:
+                        if planned.lower().startswith(prefix.lower()):
+                            planned = planned[len(prefix):].strip().lstrip("-:").strip()
+                    break
+
+        # Find actual activities for this day
+        day_activities = [a for a in activities if a.get("date") == date_str]
+
+        # Determine status color
+        status = "future"  # gray
+        actual_summary = ""
+        if day_activities:
+            parts = []
+            for a in day_activities:
+                p = [a.get("type", "")]
+                if a.get("duration_min"): p.append(f"{int(a['duration_min'])}min")
+                if a.get("distance_km"): p.append(f"{a['distance_km']}km")
+                if a.get("avg_hr"): p.append(f"p{a['avg_hr']}")
+                parts.append(" ".join(p))
+            actual_summary = " + ".join(parts)
+
+            if not planned or "vila" in planned.lower() or "rest" in planned.lower():
+                # Trained on a rest day — yellow
+                status = "yellow" if planned and ("vila" in planned.lower()) else "green"
+            else:
+                status = "green"  # Did something on a planned day
+        elif is_past:
+            if planned and "vila" not in planned.lower() and "rest" not in planned.lower():
+                status = "red"  # Missed a planned workout
+            else:
+                status = "green"  # Rest day, correctly rested
+        elif is_today:
+            status = "today"
+
+        days.append({
+            "day": day_short,
+            "date": date_str,
+            "planned": planned,
+            "actual": actual_summary,
+            "status": status,
+            "is_today": is_today,
+        })
+
+    return {"days": days, "has_plan": plan_text is not None}
+
+
 # ── Coach Brief (for dashboard) ──────────────────────────────────
 
 @app.get("/api/coach/brief")

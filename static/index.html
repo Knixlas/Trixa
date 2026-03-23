@@ -176,6 +176,35 @@ input:focus { border-color: var(--accent); }
 .plan-content { line-height: 1.6; font-size: 0.85rem; white-space: pre-wrap; }
 .plan-empty { text-align: center; padding: 1.5rem 1rem; color: var(--text-dim); font-size: 0.85rem; }
 
+/* ── Weekly Status Grid ── */
+.week-grid { display: flex; flex-direction: column; gap: 2px; }
+.week-row {
+  display: grid; grid-template-columns: 36px 4px 1fr; gap: 0.4rem;
+  align-items: center; padding: 0.4rem 0; font-size: 0.8rem;
+}
+.week-row.is-today { background: var(--surface2); border-radius: 6px; padding: 0.4rem; margin: 0 -0.4rem; }
+.week-day { font-weight: 600; font-size: 0.75rem; color: var(--text-dim); text-align: center; }
+.week-dot { width: 4px; height: 100%; min-height: 16px; border-radius: 2px; }
+.dot-status-green { background: #2ecc71; }
+.dot-status-yellow { background: #f39c12; }
+.dot-status-red { background: #e74c3c; }
+.dot-status-today { background: var(--accent); }
+.dot-status-future { background: #333; }
+.week-info { min-width: 0; }
+.week-planned { color: var(--text); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-actual { color: #2ecc71; font-size: 0.7rem; margin-top: 1px; }
+.week-actual.missed { color: #e74c3c; }
+
+/* ── Nyckeltal Grid ── */
+.metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.metric-box {
+  background: var(--surface2); border-radius: 8px; padding: 0.5rem 0.6rem;
+  text-align: center;
+}
+.metric-box .metric-label { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.metric-box .metric-value { font-size: 1.1rem; font-weight: 700; margin-top: 0.1rem; }
+.metric-box .metric-unit { font-size: 0.65rem; color: var(--text-dim); }
+
 /* ── Chat ── */
 #chat-view { display: none; flex-direction: column; padding-bottom: 0; }
 #chat-view.active { display: flex; }
@@ -297,13 +326,13 @@ input:focus { border-color: var(--accent); }
       </div>
     </div>
 
-    <!-- Zoner -->
+    <!-- Nyckeltal -->
     <div class="section-card" id="card-zones">
       <div class="section-header" onclick="toggleSection('card-zones')">
-        <h3>&#x1F4CA; Zoner</h3><span class="chevron">&#x25B6;</span>
+        <h3>&#x1F4CA; Nyckeltal</h3><span class="chevron">&#x25B6;</span>
       </div>
       <div class="section-body" id="zones-body">
-        <div style="color:var(--text-dim);font-size:0.85rem">Inga zoner sparade. Be Trixa berakna!</div>
+        <div style="color:var(--text-dim);font-size:0.85rem">Laddar...</div>
       </div>
     </div>
 
@@ -345,6 +374,18 @@ input:focus { border-color: var(--accent); }
     <div class="profile-section" id="strava-section">
       <h3>Strava</h3>
       <div id="strava-status"></div>
+    </div>
+
+    <div class="profile-section" id="zones-edit-section">
+      <h3>Nyckeltal</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+        <div class="profile-input"><label>FTP (watt)</label><input type="number" id="z-ftp" placeholder="280"></div>
+        <div class="profile-input"><label>CSS (/100m)</label><input type="text" id="z-css" placeholder="1:45"></div>
+        <div class="profile-input"><label>Troskelfart (/km)</label><input type="text" id="z-pace" placeholder="4:30"></div>
+        <div class="profile-input"><label>Troskelpuls</label><input type="number" id="z-thr" placeholder="165"></div>
+        <div class="profile-input"><label>Max puls</label><input type="number" id="z-max" placeholder="185"></div>
+      </div>
+      <button class="btn btn-sm" onclick="saveZones()" style="margin-top:0.5rem">Spara nyckeltal</button>
     </div>
 
     <div class="profile-section">
@@ -530,17 +571,9 @@ function renderHome() {
   // Upcoming 3 days
   renderUpcoming();
 
-  // Zones
+  // Zones + Plan + Activities (async, don't block)
   renderZones();
-
-  // Plan
-  const planMsg = [...chatHistory].reverse().find(m =>
-    m.role === 'assistant' && ['VECKOPLAN','MAN ','Mandag','**Man'].some(k => m.content?.includes(k))
-  );
-  document.getElementById('plan-content').innerHTML = planMsg
-    ? `<div class="plan-content">${md(planMsg.content)}</div>`
-    : `<div class="plan-empty">Be Trixa om en veckoplan i chatten!</div>`;
-
+  renderWeekPlan();
   renderStravaActivities();
 }
 
@@ -616,18 +649,65 @@ function renderUpcoming() {
   el.innerHTML = html;
 }
 
-function renderZones() {
+async function renderZones() {
   const el = document.getElementById('zones-body');
-  // Look for zones in chat history
-  const zonesMsg = [...chatHistory].reverse().find(m =>
-    m.role === 'assistant' && (m.content?.includes('Z1') || m.content?.includes('Zon 1') || m.content?.includes('FTP'))
-  );
-  if (!zonesMsg) {
-    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem;padding:0.3rem 0">Fraga Trixa: "Berakna mina zoner"</div>';
-    return;
+  try {
+    const r = await fetch('/api/athlete/zones', {headers: hdrs()});
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    const z = data.zones;
+    if (!z || (!z.ftp && !z.css_per_100m && !z.threshold_pace && !z.threshold_hr)) {
+      el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Fraga Trixa: "Berakna mina zoner" eller fyll i under Profil</div>';
+      return;
+    }
+    let html = '<div class="metrics-grid">';
+    if (z.ftp) html += `<div class="metric-box"><div class="metric-label">FTP</div><div class="metric-value">${z.ftp}</div><div class="metric-unit">watt</div></div>`;
+    if (z.css_per_100m) html += `<div class="metric-box"><div class="metric-label">CSS</div><div class="metric-value">${esc(z.css_per_100m)}</div><div class="metric-unit">/100m</div></div>`;
+    if (z.threshold_pace) html += `<div class="metric-box"><div class="metric-label">Troskelfart</div><div class="metric-value">${esc(z.threshold_pace)}</div><div class="metric-unit">/km</div></div>`;
+    if (z.threshold_hr) html += `<div class="metric-box"><div class="metric-label">Troskelpuls</div><div class="metric-value">${z.threshold_hr}</div><div class="metric-unit">bpm</div></div>`;
+    if (z.max_hr) html += `<div class="metric-box"><div class="metric-label">Max puls</div><div class="metric-value">${z.max_hr}</div><div class="metric-unit">bpm</div></div>`;
+    html += '</div>';
+    el.innerHTML = html;
+  } catch {
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Kunde inte ladda nyckeltal</div>';
   }
-  // Show the zones message as formatted text
-  el.innerHTML = `<div style="font-size:0.8rem;line-height:1.5">${md(zonesMsg.content)}</div>`;
+}
+
+async function renderWeekPlan() {
+  const el = document.getElementById('plan-content');
+  try {
+    const r = await fetch('/api/plan/status', {headers: hdrs()});
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    if (!data.has_plan && (!data.days || !data.days.some(d => d.actual))) {
+      el.innerHTML = '<div class="plan-empty">Be Trixa om en veckoplan i chatten!</div>';
+      return;
+    }
+    let html = '<div class="week-grid">';
+    for (const d of data.days) {
+      const dotClass = 'dot-status-' + d.status;
+      const todayClass = d.is_today ? ' is-today' : '';
+      const planned = d.planned || (d.is_today ? 'Ingen plan' : '');
+      html += `<div class="week-row${todayClass}">
+        <div class="week-day">${esc(d.day)}</div>
+        <div class="week-dot ${dotClass}"></div>
+        <div class="week-info">
+          <div class="week-planned">${planned ? esc(planned) : ''}</div>
+          ${d.actual ? `<div class="week-actual">${esc(d.actual)}</div>` : (d.status === 'red' ? '<div class="week-actual missed">Missat</div>' : '')}
+        </div>
+      </div>`;
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  } catch {
+    // Fallback to chat-based plan
+    const planMsg = [...chatHistory].reverse().find(m =>
+      m.role === 'assistant' && ['VECKOPLAN','MAN ','Mandag','**Man'].some(k => m.content?.includes(k))
+    );
+    el.innerHTML = planMsg
+      ? `<div class="plan-content">${md(planMsg.content)}</div>`
+      : '<div class="plan-empty">Be Trixa om en veckoplan i chatten!</div>';
+  }
 }
 
 // ── Chat ──
@@ -896,9 +976,33 @@ async function renderProfile() {
     if (d.profile) {
       document.getElementById('icu-key').value = d.profile.intervals_api_key || '';
       document.getElementById('icu-athlete').value = d.profile.intervals_athlete_id || '';
+      document.getElementById('z-ftp').value = d.profile.ftp || '';
+      document.getElementById('z-css').value = d.profile.css_per_100m || '';
+      document.getElementById('z-pace').value = d.profile.threshold_pace || '';
+      document.getElementById('z-thr').value = d.profile.threshold_hr || '';
+      document.getElementById('z-max').value = d.profile.max_hr || '';
     }
   } catch {}
   renderStravaProfile();
+}
+
+async function saveZones() {
+  const data = {};
+  const ftp = document.getElementById('z-ftp').value;
+  const css = document.getElementById('z-css').value;
+  const pace = document.getElementById('z-pace').value;
+  const thr = document.getElementById('z-thr').value;
+  const max = document.getElementById('z-max').value;
+  if (ftp) data.ftp = parseInt(ftp);
+  if (css) data.css_per_100m = css;
+  if (pace) data.threshold_pace = pace;
+  if (thr) data.threshold_hr = parseInt(thr);
+  if (max) data.max_hr = parseInt(max);
+  try {
+    const r = await fetch('/api/athlete/zones', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
+    alert(r.ok ? 'Nyckeltal sparade!' : 'Kunde inte spara');
+    if (r.ok) { cachedBrief = null; renderZones(); }
+  } catch (e) { alert('Fel: ' + e.message); }
 }
 
 async function saveIntervals() {
