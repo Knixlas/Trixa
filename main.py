@@ -299,7 +299,7 @@ async def chat(req: ChatRequest, request: Request):
     # Build system prompt from profile + activities + coach memory
     profile = db.get_profile(uid, token)
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=30)
+        activities = db.get_recent_strava_activities(uid, token, days=60)
     except Exception:
         activities = None
     try:
