@@ -167,6 +167,10 @@ input:focus { border-color: var(--accent); }
 .rating-input .star { cursor: pointer; font-size: 0.9rem; color: #666; transition: color 0.1s; }
 .rating-input .star:hover, .rating-input .star:hover ~ .star { color: var(--accent); }
 .rating-display { font-size: 0.8rem; color: #f5a623; margin-top: 2px; }
+.strength-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 0.3rem; }
+.strength-table th { text-align: left; color: var(--text-dim); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; padding: 0.3rem 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.strength-table td { padding: 0.35rem 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.strength-table tr:last-child td { border-bottom: none; }
 .strava-btn {
   width: 100%; padding: 0.5rem; background: #fc4c02; border: none;
   border-radius: 8px; color: white; font-size: 0.85rem; font-weight: 600;
@@ -348,6 +352,16 @@ input:focus { border-color: var(--accent); }
         <h3>&#x1F4C5; Veckoplan</h3><span class="chevron">&#x25B6;</span>
       </div>
       <div class="section-body" id="plan-content"></div>
+    </div>
+
+    <!-- Nasta styrkepass (collapsed) -->
+    <div class="section-card" id="card-strength">
+      <div class="section-header" onclick="toggleSection('card-strength')">
+        <h3>&#x1F4AA; Nasta styrkepass</h3><span class="chevron">&#x25B6;</span>
+      </div>
+      <div class="section-body" id="strength-body">
+        <div style="color:var(--text-dim);font-size:0.85rem">Laddar...</div>
+      </div>
     </div>
 
     <!-- Mal (collapsed) -->
@@ -665,9 +679,10 @@ function renderHome() {
   // Tip box — fetch from coach brief API
   fetchCoachBrief();
 
-  // Goals + Next session
+  // Goals + Next session + Strength
   renderGoals();
   renderNextSession();
+  renderNextStrength();
 
   // Zones + Plan + Activities (async, don't block)
   renderZones();
@@ -757,6 +772,49 @@ async function renderNextSession() {
     el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Inga fler pass i planen — be Trixa om fler dagar!</div>';
   } catch {
     el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Kunde inte ladda plan</div>';
+  }
+}
+
+async function renderNextStrength() {
+  const el = document.getElementById('strength-body');
+  try {
+    const r = await fetch('/api/plan/next-strength', {headers: hdrs()});
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    if (!data.session) {
+      el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Inget styrkepass planerat</div>';
+      return;
+    }
+    const s = data.session;
+    let html = `<div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem">${esc(s.weekday)} ${s.date?.slice(5) || ''}</div>`;
+    html += `<div style="font-size:0.95rem;font-weight:700;margin-bottom:0.3rem">${esc(s.title)}</div>`;
+    if (s.purpose) html += `<div style="font-size:0.75rem;color:var(--accent);margin-bottom:0.5rem;font-style:italic">${esc(s.purpose)}</div>`;
+    if (s.exercises && s.exercises.length > 0) {
+      html += '<table class="strength-table"><thead><tr><th>Ovning</th><th>Set x Rep</th><th>Vikt</th></tr></thead><tbody>';
+      for (const ex of s.exercises) {
+        const setRep = `${ex.sets}x${ex.reps}${ex.unit === 's' ? 's' : ''}`;
+        let weight = '';
+        if (ex.weight_from && ex.weight_to && ex.weight_from !== ex.weight_to) {
+          weight = `${ex.weight_from}-${ex.weight_to} kg`;
+        } else if (ex.weight_from) {
+          weight = `${ex.weight_from} kg`;
+        } else {
+          weight = '-';
+        }
+        const note = ex.note ? ` <span style="font-size:0.65rem;opacity:0.6">${esc(ex.note)}</span>` : '';
+        html += `<tr><td>${esc(ex.name)}${note}</td><td>${setRep}</td><td>${weight}</td></tr>`;
+      }
+      html += '</tbody></table>';
+    } else if (s.details) {
+      html += `<div style="font-size:0.8rem;color:var(--text-dim);line-height:1.5">${esc(s.details)}</div>`;
+    }
+    el.innerHTML = html;
+    // Auto-open if there's actual exercise data
+    if (s.exercises && s.exercises.length > 0) {
+      document.getElementById('card-strength').classList.add('open');
+    }
+  } catch {
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Kunde inte ladda styrkepass</div>';
   }
 }
 

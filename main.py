@@ -173,6 +173,23 @@ def _get_plan_tool():
                             "title": {"type": "string", "description": "Exakt det som visas pa Hem-sidan. T.ex. 'Styrka 30min + Lop 35min Z2' eller 'Vila'"},
                             "details": {"type": "string", "description": "Zoninfo, intervaller, puls/watt-granser"},
                             "purpose": {"type": "string", "description": "Kort syfte, t.ex. 'Bygga aerob bas'"},
+                            "exercises": {
+                                "type": "array",
+                                "description": "For styrkepass: lista med ovningar. Utelamna for andra sporttyper.",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string", "description": "Ovningsnamn, t.ex. 'Knaboj'"},
+                                        "sets": {"type": "integer"},
+                                        "reps": {"type": "integer", "description": "Reps per set, eller sekunder om unit='s'"},
+                                        "unit": {"type": "string", "description": "Enhet: 'reps' (default) eller 's' for tid"},
+                                        "weight_from": {"type": "number", "description": "Vikt forsta set (kg)"},
+                                        "weight_to": {"type": "number", "description": "Vikt sista set (kg). Samma som weight_from om konstant."},
+                                        "note": {"type": "string", "description": "Extra info, t.ex. 'langsammt ner'"},
+                                    },
+                                    "required": ["name", "sets", "reps"],
+                                },
+                            },
                         },
                         "required": ["date", "sport", "title"],
                     },
@@ -972,6 +989,42 @@ async def plan_status(request: Request):
         })
 
     return {"days": days, "has_plan": has_plan}
+
+
+@app.get("/api/plan/next-strength")
+async def next_strength(request: Request):
+    """Return the next planned strength session with exercises."""
+    uid, token = _get_auth(request)
+    from_date = datetime.now().strftime("%Y-%m-%d")
+    to_date = (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d")
+    try:
+        planned = db.get_planned_sessions(uid, token, from_date, to_date)
+    except Exception:
+        return {"session": None}
+    for s in planned:
+        sport = (s.get("sport") or "").lower()
+        title = (s.get("title") or "").lower()
+        if "styrka" in sport or "styrka" in title or "strength" in sport:
+            WEEKDAYS_SV_SHORT = ["Man", "Tis", "Ons", "Tor", "Fre", "Lor", "Son"]
+            d = s.get("date", "")
+            weekday = ""
+            try:
+                from datetime import datetime as dt2
+                parsed = dt2.strptime(d, "%Y-%m-%d")
+                weekday = WEEKDAYS_SV_SHORT[parsed.weekday()]
+            except Exception:
+                pass
+            return {
+                "session": {
+                    "date": d,
+                    "weekday": weekday,
+                    "title": s.get("title"),
+                    "details": s.get("details"),
+                    "purpose": s.get("purpose"),
+                    "exercises": s.get("exercises"),  # JSONB array
+                }
+            }
+    return {"session": None}
 
 
 # ── Coach Brief (for dashboard) ──────────────────────────────────
