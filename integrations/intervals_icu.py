@@ -131,18 +131,27 @@ def _format_duration(seconds: int) -> str:
 def _format_intensity(step: dict) -> str:
     """Format intensity target for Intervals.icu description.
 
-    Uses upper limit only (as requested by user).
-    Intervals.icu supports: 165bpm HR, 280w, Z3, 75%
+    Uses range (low-high) when both are available, otherwise just upper limit.
+    Intervals.icu supports: 143-165bpm HR, 200-280w, Z3, 75%
     """
-    # HR target (upper limit) — used for running
+    # HR target — used for running
+    hr_low = step.get("hr_low")
     hr_high = step.get("hr_high")
+    if hr_low and hr_high:
+        return f"{hr_low}-{hr_high}bpm HR"
     if hr_high:
-        return f"{hr_high}bpm HR"
+        # Estimate lower bound as ~85% of upper
+        estimated_low = int(hr_high * 0.85)
+        return f"{estimated_low}-{hr_high}bpm HR"
 
-    # Power target (upper limit) — used for cycling
+    # Power target — used for cycling
+    power_low = step.get("power_low")
     power_high = step.get("power_high")
+    if power_low and power_high:
+        return f"{power_low}-{power_high}w"
     if power_high:
-        return f"{power_high}w"
+        estimated_low = int(power_high * 0.85)
+        return f"{estimated_low}-{power_high}w"
 
     return ""
 

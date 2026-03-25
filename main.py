@@ -204,7 +204,8 @@ WORKOUT_TOOL = {
     "name": "create_workout_file",
     "description": (
         "Skapa ett strukturerat traningspass som pushas till Intervals.icu. "
-        "For lopning: ange ALLTID hr_high. For cykling: ange ALLTID power_high. "
+        "For lopning: ange ALLTID hr_low och hr_high (pulsspann). "
+        "For cykling: ange ALLTID power_low och power_high (wattspann). "
         "Ange description pa varje steg — det visas pa klockan."
     ),
     "input_schema": {
@@ -221,8 +222,10 @@ WORKOUT_TOOL = {
                         "duration_seconds": {"type": "integer"},
                         "repeats": {"type": "integer"},
                         "description": {"type": "string"},
-                        "hr_high": {"type": "integer"},
-                        "power_high": {"type": "integer"},
+                        "hr_low": {"type": "integer", "description": "Nedre pulsgrans (bpm)"},
+                        "hr_high": {"type": "integer", "description": "Ovre pulsgrans (bpm)"},
+                        "power_low": {"type": "integer", "description": "Nedre wattgrans"},
+                        "power_high": {"type": "integer", "description": "Ovre wattgrans"},
                     },
                     "required": ["type", "duration_seconds", "description"],
                 },
