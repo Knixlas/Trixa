@@ -421,6 +421,7 @@ async def login(req: AuthRequest):
             "email": result.user.email,
             "name": result.user.user_metadata.get("name", ""),
             "access_token": result.session.access_token,
+            "refresh_token": result.session.refresh_token,
             "tier": tier,
             "is_admin": is_admin,
             "trial_days": trial_days_remaining(sub),
@@ -444,6 +445,41 @@ async def signup(req: AuthRequest):
         raise HTTPException(400, "Signup failed")
     except Exception as e:
         raise HTTPException(400, str(e))
+
+
+@app.post("/api/auth/refresh")
+async def refresh_token(request: Request):
+    """Refresh an expired access token using refresh_token."""
+    try:
+        body = await request.json()
+        rt = body.get("refresh_token")
+        if not rt:
+            raise HTTPException(400, "Missing refresh_token")
+        client = db.get_client()
+        result = client.auth.refresh_session(rt)
+        if not result.session:
+            raise HTTPException(401, "Refresh failed")
+        sub = None
+        try:
+            sub = db.ensure_trial(result.user.id, result.session.access_token)
+        except Exception:
+            pass
+        is_admin = (result.user.email == ADMIN_EMAIL)
+        tier = get_user_tier(sub, is_admin)
+        return {
+            "user_id": result.user.id,
+            "email": result.user.email,
+            "name": result.user.user_metadata.get("name", ""),
+            "access_token": result.session.access_token,
+            "refresh_token": result.session.refresh_token,
+            "tier": tier,
+            "is_admin": is_admin,
+            "trial_days": trial_days_remaining(sub),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(401, f"Refresh failed: {e}")
 
 
 # ── Profile ──────────────────────────────────────────────────────

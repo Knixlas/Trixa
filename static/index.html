@@ -526,6 +526,37 @@ function hdrs() {
   };
 }
 
+// Auto-refresh token every 45 min (Supabase tokens expire after 1h)
+let refreshInterval = null;
+async function refreshAuth() {
+  if (!user?.refresh_token) return;
+  try {
+    const r = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({refresh_token: user.refresh_token}),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      user = data;
+      localStorage.setItem('trixa_user', JSON.stringify(user));
+      console.log('[auth] Token refreshed');
+    } else {
+      console.warn('[auth] Refresh failed, logging out');
+      doLogout();
+    }
+  } catch (e) {
+    console.warn('[auth] Refresh error:', e);
+  }
+}
+
+function startTokenRefresh() {
+  if (refreshInterval) clearInterval(refreshInterval);
+  refreshInterval = setInterval(refreshAuth, 45 * 60 * 1000); // 45 min
+  // Also refresh immediately if token is older than 50 min
+  refreshAuth();
+}
+
 // ── Auth ──
 function showAuthTab(tab) {
   document.querySelectorAll('.auth-tabs button').forEach(b => b.classList.remove('active'));
@@ -1297,6 +1328,7 @@ async function showApp() {
   main.style.display = 'flex';
   main.style.flexDirection = 'column';
   main.style.height = '100dvh';
+  startTokenRefresh();
   try {
     const r = await fetch('/api/conversation', {headers: hdrs()});
     const d = await r.json();
