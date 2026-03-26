@@ -968,10 +968,28 @@ async function sendMessage() {
     if (images.length) {
       body.images = images.map(img => ({base64: img.base64, media_type: img.mediaType}));
     }
-    const r = await fetch('/api/chat', {
-      method: 'POST', headers: hdrs(),
-      body: JSON.stringify(body),
-    });
+
+    // Fetch with 90s timeout + auto-retry once
+    async function chatFetch(attempt) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 90000);
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST', headers: hdrs(),
+          body: JSON.stringify(body), signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        return res;
+      } catch (e) {
+        clearTimeout(timer);
+        if (e.name === 'AbortError' && attempt < 2) {
+          typing.textContent = 'Trixa tanker fortfarande...';
+          return chatFetch(attempt + 1);
+        }
+        throw e;
+      }
+    }
+    const r = await chatFetch(1);
     typing.remove();
 
     if (!r.ok) {
@@ -1030,7 +1048,10 @@ async function sendMessage() {
     renderHome();
   } catch (e) {
     typing.remove();
-    appendMsg('assistant', 'Anslutningsfel. Forsok igen.');
+    const errMsg = e.name === 'AbortError'
+      ? 'Trixa tog for lang tid pa sig. Forsok igen — kortare meddelanden gar snabbare.'
+      : 'Anslutningsfel. Kolla natet och forsok igen.';
+    appendMsg('assistant', errMsg);
   }
   document.getElementById('send-btn').disabled = false;
 }
