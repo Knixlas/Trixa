@@ -221,8 +221,10 @@ WORKOUT_TOOL = {
     "name": "create_workout_file",
     "description": (
         "Skapa ett strukturerat traningspass som pushas till Intervals.icu. "
-        "For lopning: ange ALLTID hr_low och hr_high (pulsspann). "
-        "For cykling: ange ALLTID power_low och power_high (wattspann). "
+        "ANVAND ZONER for intensitet — inte absoluta pulsvarden. "
+        "For lopning: ange hr_zone (en zon) eller hr_zone_low + hr_zone_high (spann). "
+        "For cykling: ange power_zone eller power_zone_low + power_zone_high. "
+        "Zoner: 1=aterhamtning, 2=aerob bas, 3=tempo, 4=tröskel, 5=VO2max. "
         "Ange description pa varje steg — det visas pa klockan."
     ),
     "input_schema": {
@@ -238,11 +240,13 @@ WORKOUT_TOOL = {
                         "type": {"type": "string", "enum": ["warmup", "active", "rest", "cooldown"]},
                         "duration_seconds": {"type": "integer"},
                         "repeats": {"type": "integer"},
-                        "description": {"type": "string"},
-                        "hr_low": {"type": "integer", "description": "Nedre pulsgrans (bpm)"},
-                        "hr_high": {"type": "integer", "description": "Ovre pulsgrans (bpm)"},
-                        "power_low": {"type": "integer", "description": "Nedre wattgrans"},
-                        "power_high": {"type": "integer", "description": "Ovre wattgrans"},
+                        "description": {"type": "string", "description": "Visas pa klockan, t.ex. 'Tröskel' eller 'Latt jogg'"},
+                        "hr_zone": {"type": "integer", "description": "HR-zon 1-5. For lopning/sim."},
+                        "hr_zone_low": {"type": "integer", "description": "Nedre HR-zon i spann, t.ex. 2 for Z2-Z4."},
+                        "hr_zone_high": {"type": "integer", "description": "Ovre HR-zon i spann, t.ex. 4 for Z2-Z4."},
+                        "power_zone": {"type": "integer", "description": "Power-zon 1-5. For cykling."},
+                        "power_zone_low": {"type": "integer", "description": "Nedre power-zon i spann."},
+                        "power_zone_high": {"type": "integer", "description": "Ovre power-zon i spann."},
                     },
                     "required": ["type", "duration_seconds", "description"],
                 },

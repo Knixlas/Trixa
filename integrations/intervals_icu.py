@@ -131,27 +131,48 @@ def _format_duration(seconds: int) -> str:
 def _format_intensity(step: dict) -> str:
     """Format intensity target for Intervals.icu description.
 
-    Intervals.icu HR format: '120-143bpm' (no space before bpm, range with dash)
-    Intervals.icu power format: '200-280w'
-    The 'HR' suffix tells the parser it's heart rate, not pace.
+    Intervals.icu zone format:
+    - 'Z2 HR' for single HR zone
+    - 'Z2-Z4 HR' for HR zone range
+    - 'Z3' for power zone (no suffix = power by default)
+    - 'Z3-Z4' for power zone range
+
+    Falls back to absolute values if zones not specified.
     """
-    # HR target — used for running
+    # Zone-based (preferred — works with athlete's configured zones)
+    hr_zone_low = step.get("hr_zone_low")
+    hr_zone_high = step.get("hr_zone_high")
+    hr_zone = step.get("hr_zone")
+    power_zone_low = step.get("power_zone_low")
+    power_zone_high = step.get("power_zone_high")
+    power_zone = step.get("power_zone")
+
+    # HR zones (running/swim)
+    if hr_zone_low and hr_zone_high:
+        return f"Z{hr_zone_low}-Z{hr_zone_high} HR"
+    if hr_zone:
+        return f"Z{hr_zone} HR"
+
+    # Power zones (cycling)
+    if power_zone_low and power_zone_high:
+        return f"Z{power_zone_low}-Z{power_zone_high}"
+    if power_zone:
+        return f"Z{power_zone}"
+
+    # Fallback: absolute values
     hr_low = step.get("hr_low")
     hr_high = step.get("hr_high")
     if hr_low and hr_high:
         return f"{int(hr_low)}-{int(hr_high)}bpm"
     if hr_high:
-        estimated_low = int(int(hr_high) * 0.85)
-        return f"{estimated_low}-{int(hr_high)}bpm"
+        return f"{int(int(hr_high) * 0.85)}-{int(hr_high)}bpm"
 
-    # Power target — used for cycling
     power_low = step.get("power_low")
     power_high = step.get("power_high")
     if power_low and power_high:
         return f"{int(power_low)}-{int(power_high)}w"
     if power_high:
-        estimated_low = int(int(power_high) * 0.85)
-        return f"{estimated_low}-{int(power_high)}w"
+        return f"{int(int(power_high) * 0.85)}-{int(power_high)}w"
 
     return ""
 
