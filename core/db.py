@@ -8,7 +8,6 @@ import os
 from datetime import date, datetime, timedelta, timezone
 
 from supabase import create_client, Client
-from supabase.lib.client_options import ClientOptions
 
 TRIAL_DAYS = 30
 
@@ -17,14 +16,13 @@ _TIMEOUT = 15.0
 
 
 def _create_client(url: str, key: str) -> Client:
-    options = ClientOptions(
-        postgrest_client_timeout=_TIMEOUT,
-        storage_client_timeout=int(_TIMEOUT),
-        function_client_timeout=int(_TIMEOUT),
-    )
-    client = create_client(url, key, options=options)
-    # Auth (GoTrue) creates its own httpx.Client with no timeout config.
-    # Patch it so login doesn't time out on cold starts.
+    # Let create_client use its own defaults (avoids ClientOptions.storage bug
+    # in supabase 2.28), then patch timeouts after creation.
+    client = create_client(url, key)
+    try:
+        client.postgrest.session.timeout = _TIMEOUT
+    except Exception:
+        pass
     try:
         client.auth._http_client.timeout = _TIMEOUT
     except Exception:
