@@ -7,34 +7,39 @@ from __future__ import annotations
 import os
 from datetime import date, datetime, timedelta, timezone
 
+import httpx
 from supabase import create_client, Client
+from supabase.lib.client_options import ClientOptions
 
 TRIAL_DAYS = 30
 
+# Shared timeout for all Supabase HTTP calls (auth + postgrest + storage)
+_TIMEOUT = 15.0
+
+
+def _make_options() -> ClientOptions:
+    return ClientOptions(
+        postgrest_client_timeout=_TIMEOUT,
+        storage_client_timeout=int(_TIMEOUT),
+        function_client_timeout=int(_TIMEOUT),
+        httpx_client=httpx.Client(timeout=_TIMEOUT),
+    )
+
 
 def get_client() -> Client:
-    client = create_client(
+    return create_client(
         os.environ.get("SUPABASE_URL", ""),
         os.environ.get("SUPABASE_ANON_KEY", ""),
+        options=_make_options(),
     )
-    # Increase timeout for Supabase free tier latency
-    try:
-        client.postgrest.session.timeout = 15.0
-    except Exception:
-        pass
-    return client
 
 
 def get_admin_client() -> Client:
-    client = create_client(
+    return create_client(
         os.environ.get("SUPABASE_URL", ""),
         os.environ.get("SUPABASE_SERVICE_KEY", ""),
+        options=_make_options(),
     )
-    try:
-        client.postgrest.session.timeout = 15.0
-    except Exception:
-        pass
-    return client
 
 
 # ── Auth ─────────────────────────────────────────────────────────
