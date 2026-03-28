@@ -15,10 +15,13 @@ TRIAL_DAYS = 30
 
 _TIMEOUT = 30.0  # Supabase free tier can cold-start for 20-30s
 
+# Singletons — one connection pool per process, not one per request
+_client: Client | None = None
+_admin_client: Client | None = None
+
 
 def _create_client(url: str, key: str) -> Client:
     client = create_client(url, key)
-    # Patch timeouts on internal HTTP clients (supabase 2.28 has no clean way)
     for attr in ("postgrest.session", "auth._http_client"):
         try:
             obj = client
@@ -31,17 +34,23 @@ def _create_client(url: str, key: str) -> Client:
 
 
 def get_client() -> Client:
-    return _create_client(
-        os.environ.get("SUPABASE_URL", ""),
-        os.environ.get("SUPABASE_ANON_KEY", ""),
-    )
+    global _client
+    if _client is None:
+        _client = _create_client(
+            os.environ.get("SUPABASE_URL", ""),
+            os.environ.get("SUPABASE_ANON_KEY", ""),
+        )
+    return _client
 
 
 def get_admin_client() -> Client:
-    return _create_client(
-        os.environ.get("SUPABASE_URL", ""),
-        os.environ.get("SUPABASE_SERVICE_KEY", ""),
-    )
+    global _admin_client
+    if _admin_client is None:
+        _admin_client = _create_client(
+            os.environ.get("SUPABASE_URL", ""),
+            os.environ.get("SUPABASE_SERVICE_KEY", ""),
+        )
+    return _admin_client
 
 
 # ── Auth ─────────────────────────────────────────────────────────
