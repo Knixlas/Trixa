@@ -425,6 +425,17 @@ async def serve_frontend():
     return HTMLResponse((ROOT / "static" / "index.html").read_text(encoding="utf-8"))
 
 
+@app.get("/api/health")
+async def health():
+    """Keepalive endpoint — pingas var 5:e dag for att halla Supabase vaken."""
+    try:
+        client = db.get_client()
+        client.table("profiles").select("id").limit(1).execute()
+        return {"ok": True, "supabase": "alive"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 # ── Auth ─────────────────────────────────────────────────────────
 
 @app.post("/api/auth/login")
