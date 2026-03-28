@@ -7,26 +7,26 @@ from __future__ import annotations
 import os
 from datetime import date, datetime, timedelta, timezone
 
+import time
+
 from supabase import create_client, Client
 
 TRIAL_DAYS = 30
 
-# Supabase free tier cold-starts can be slow — 15s covers auth + postgrest
-_TIMEOUT = 15.0
+_TIMEOUT = 30.0  # Supabase free tier can cold-start for 20-30s
 
 
 def _create_client(url: str, key: str) -> Client:
-    # Let create_client use its own defaults (avoids ClientOptions.storage bug
-    # in supabase 2.28), then patch timeouts after creation.
     client = create_client(url, key)
-    try:
-        client.postgrest.session.timeout = _TIMEOUT
-    except Exception:
-        pass
-    try:
-        client.auth._http_client.timeout = _TIMEOUT
-    except Exception:
-        pass
+    # Patch timeouts on internal HTTP clients (supabase 2.28 has no clean way)
+    for attr in ("postgrest.session", "auth._http_client"):
+        try:
+            obj = client
+            for part in attr.split("."):
+                obj = getattr(obj, part)
+            obj.timeout = _TIMEOUT
+        except Exception:
+            pass
     return client
 
 
@@ -55,12 +55,23 @@ def sign_up(email: str, password: str, name: str = ""):
     })
 
 
-def sign_in(email: str, password: str):
-    client = get_client()
-    return client.auth.sign_in_with_password({
-        "email": email,
-        "password": password,
-    })
+def sign_in(email: str, password: str, _retries: int = 2):
+    """Sign in with retry — Supabase free tier cold-starts cause timeouts."""
+    last_err = None
+    for attempt in range(_retries + 1):
+        try:
+            client = get_client()
+            return client.auth.sign_in_with_password({
+                "email": email,
+                "password": password,
+            })
+        except Exception as e:
+            last_err = e
+            if "timed out" in str(e).lower() and attempt < _retries:
+                time.sleep(2)
+                continue
+            raise
+    raise last_err
 
 
 # ── Profiles ─────────────────────────────────────────────────────
