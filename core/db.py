@@ -7,38 +7,42 @@ from __future__ import annotations
 import os
 from datetime import date, datetime, timedelta, timezone
 
-import httpx
 from supabase import create_client, Client
 from supabase.lib.client_options import ClientOptions
 
 TRIAL_DAYS = 30
 
-# Shared timeout for all Supabase HTTP calls (auth + postgrest + storage)
+# Supabase free tier cold-starts can be slow — 15s covers auth + postgrest
 _TIMEOUT = 15.0
 
 
-def _make_options() -> ClientOptions:
-    return ClientOptions(
+def _create_client(url: str, key: str) -> Client:
+    options = ClientOptions(
         postgrest_client_timeout=_TIMEOUT,
         storage_client_timeout=int(_TIMEOUT),
         function_client_timeout=int(_TIMEOUT),
-        httpx_client=httpx.Client(timeout=_TIMEOUT),
     )
+    client = create_client(url, key, options=options)
+    # Auth (GoTrue) creates its own httpx.Client with no timeout config.
+    # Patch it so login doesn't time out on cold starts.
+    try:
+        client.auth._http_client.timeout = _TIMEOUT
+    except Exception:
+        pass
+    return client
 
 
 def get_client() -> Client:
-    return create_client(
+    return _create_client(
         os.environ.get("SUPABASE_URL", ""),
         os.environ.get("SUPABASE_ANON_KEY", ""),
-        options=_make_options(),
     )
 
 
 def get_admin_client() -> Client:
-    return create_client(
+    return _create_client(
         os.environ.get("SUPABASE_URL", ""),
         os.environ.get("SUPABASE_SERVICE_KEY", ""),
-        options=_make_options(),
     )
 
 
