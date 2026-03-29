@@ -200,6 +200,9 @@ input:focus { border-color: var(--accent); }
 .dot-status-future { background: #333; }
 .week-info { min-width: 0; }
 .week-planned { color: var(--text); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.effort-cell { white-space: nowrap; }
+.effort-btn { background: none; border: 1px solid #333; border-radius: 6px; padding: 2px 5px; font-size: 0.75rem; cursor: pointer; margin: 0 1px; min-width: 28px; min-height: 28px; transition: all 0.15s; }
+.effort-btn.effort-active { border-color: var(--accent); transform: scale(1.15); box-shadow: 0 0 4px var(--accent); }
 .swim-set-list { margin: 0.3rem 0 0.5rem; }
 .swim-set-row { font-size: 0.82rem; color: var(--text-dim); padding: 0.2rem 0; padding-left: 0.5rem; border-left: 2px solid #333; }
 .swim-set-row.swim-main { color: var(--text); font-weight: 600; border-left-color: var(--accent); }
@@ -970,19 +973,24 @@ async function renderNextStrength() {
     let html = `<div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem">${esc(s.weekday)} ${s.date?.slice(5) || ''}</div>`;
     html += `<div style="font-size:0.95rem;font-weight:700;margin-bottom:0.3rem">${esc(s.title)}</div>`;
     if (s.purpose) html += `<div style="font-size:0.75rem;color:var(--accent);margin-bottom:0.5rem;font-style:italic">${esc(s.purpose)}</div>`;
+    // Fetch existing logs for this date
+    let effortLogs = {};
+    try {
+      const lr = await fetch(`/api/exercise/logs?date=${s.date}`, {headers: hdrs()});
+      if (lr.ok) effortLogs = (await lr.json()).logs || {};
+    } catch {}
+
     if (s.exercises && s.exercises.length > 0) {
-      html += '<table class="strength-table"><thead><tr><th>Övning</th><th>Detaljer</th></tr></thead><tbody>';
+      html += '<table class="strength-table"><thead><tr><th>Övning</th><th>Detaljer</th><th style="width:90px">Gjord?</th></tr></thead><tbody>';
       for (const ex of s.exercises) {
         let detail = '';
         if (ex.weights && ex.weights.length > 0) {
-          // Progressive format: 3 set: 40kg×12 / 50kg×10 / 60kg×8
           const parts = ex.weights.map((w, i) => {
             const r = ex.reps_per_set ? ex.reps_per_set[i] : ex.reps;
             return r ? `${w}kg\u00d7${r}` : `${w}kg`;
           });
           detail = `${ex.sets} set: ${parts.join(' / ')}`;
         } else {
-          // Simple format: 3×12 — 10 kg  or  3×30s
           const unit = ex.unit === 's' ? 's' : '';
           const reps = ex.reps ? `${ex.sets}\u00d7${ex.reps}${unit}` : `${ex.sets} set`;
           let weight = '';
@@ -994,7 +1002,15 @@ async function renderNextStrength() {
           detail = reps + weight;
         }
         const note = ex.note ? `<br><span style="font-size:0.65rem;opacity:0.6">${esc(ex.note)}</span>` : '';
-        html += `<tr><td>${esc(ex.name)}</td><td>${detail}${note}</td></tr>`;
+        const eName = ex.name;
+        const logged = effortLogs[eName] || 0;
+        const effortBtns = [1,2,3,4].map(v => {
+          const labels = ['💚','💛','🟠','🔴'];
+          const tips = ['Lätt','Medel','Tung','Max'];
+          const active = logged === v ? ' effort-active' : '';
+          return `<button class="effort-btn${active}" title="${tips[v-1]}" onclick="logExerciseEffort('${s.date}','${eName.replace(/'/g,"\\'")}',${v},this)">${labels[v-1]}</button>`;
+        }).join('');
+        html += `<tr><td>${esc(eName)}</td><td>${detail}${note}</td><td class="effort-cell">${effortBtns}</td></tr>`;
       }
       html += '</tbody></table>';
     } else if (s.details) {
@@ -1553,6 +1569,22 @@ async function saveAthleteProfile() {
     const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
     alert(r.ok ? 'Profil sparad!' : 'Kunde inte spara');
   } catch (e) { alert('Fel: ' + e.message); }
+}
+
+async function logExerciseEffort(date, name, effort, btn) {
+  // Toggle: if same effort clicked again, deselect
+  const row = btn.closest('tr');
+  const wasActive = btn.classList.contains('effort-active');
+  row.querySelectorAll('.effort-btn').forEach(b => b.classList.remove('effort-active'));
+  if (!wasActive) {
+    btn.classList.add('effort-active');
+    try {
+      await fetch('/api/exercise/log', {
+        method: 'POST', headers: hdrs(),
+        body: JSON.stringify({session_date: date, exercise_name: name, effort}),
+      });
+    } catch {}
+  }
 }
 
 function downloadSwimPdf(title, details, purpose) {

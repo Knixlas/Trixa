@@ -963,6 +963,62 @@ async def next_strength(request: Request):
     return {"session": None}
 
 
+# ── Exercise Logging ─────────────────────────────────────────────
+
+@app.post("/api/exercise/log")
+async def log_exercise(request: Request):
+    """Log effort level for a completed exercise in a strength session."""
+    uid, token = _get_auth(request)
+    body = await request.json()
+    name = body.get("exercise_name", "").strip()
+    date = body.get("session_date", "")
+    effort = body.get("effort")  # 1-4
+    if not name or not date or effort not in (1, 2, 3, 4):
+        raise HTTPException(400, "exercise_name, session_date, effort (1-4) required")
+    admin = db.get_admin_client()
+    # Upsert: update if same user+date+exercise already logged
+    existing = (
+        admin.table("exercise_logs")
+        .select("id")
+        .eq("user_id", uid)
+        .eq("session_date", date)
+        .eq("exercise_name", name)
+        .execute()
+    )
+    data = {
+        "user_id": uid,
+        "session_date": date,
+        "exercise_name": name,
+        "effort": effort,
+        "sets": body.get("sets"),
+        "reps": body.get("reps"),
+        "weight_from": body.get("weight_from"),
+    }
+    if existing.data:
+        admin.table("exercise_logs").update({"effort": effort}).eq("id", existing.data[0]["id"]).execute()
+    else:
+        admin.table("exercise_logs").insert(data).execute()
+    return {"ok": True}
+
+
+@app.get("/api/exercise/logs")
+async def get_exercise_logs(request: Request, date: str = ""):
+    """Get logged exercises for a given date."""
+    uid, token = _get_auth(request)
+    if not date:
+        raise HTTPException(400, "date parameter required")
+    client = db.get_client()
+    client.postgrest.auth(token)
+    result = (
+        client.table("exercise_logs")
+        .select("*")
+        .eq("user_id", uid)
+        .eq("session_date", date)
+        .execute()
+    )
+    return {"logs": {r["exercise_name"]: r["effort"] for r in (result.data or [])}}
+
+
 # ── Calendar Feed ────────────────────────────────────────────────
 
 import hmac, hashlib

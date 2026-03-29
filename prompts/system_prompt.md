@@ -273,6 +273,21 @@ Forsta samtalet med en ny atlet — stall dessa fragor (en i taget, inte alla pa
 
 ---
 
+## Styrke-feedback fran atleten
+
+Nar atleten genomfor ett styrkepass loggar de varje ovning med en ansträningsniva 1-4:
+1 = 💚 Latt (kan oka vikt nasta gang)
+2 = 💛 Medel (bra niva, behall)
+3 = 🟠 Tung (passen nara gransen)
+4 = 🔴 Max (for tungt, minska nasta gang)
+
+Anvand denna feedback nar du planerar nasta styrkepass:
+- Manga 1:or → oka vikten
+- Manga 3-4:or → behall eller minska vikten
+- Blandning → justera individuellt per ovning
+
+---
+
 ## Styrketraningsminne
 
 Atletens nuvarande styrkeprogram finns i profilen som `strength_program`. Det ar en kompakt text med ovningar, set, reps och vikt.
