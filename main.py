@@ -459,7 +459,7 @@ async def update_profile(request: Request):
         "ironman_finishes", "weekly_hours", "next_race_name",
         "next_race_date", "health_notes", "goal", "notes",
         "gender", "height_cm", "resting_hr", "blood_pressure",
-        "medications", "injuries", "self_assessment",
+        "medications", "injuries", "self_assessment", "birthdate",
     }
     fields = {k: v for k, v in body.items() if k in allowed and v is not None}
     # Allow direct health_data writes (for delete/replace operations)

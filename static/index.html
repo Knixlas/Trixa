@@ -536,11 +536,22 @@ input:focus { border-color: var(--accent); }
           </select>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-          <div class="profile-input"><label>Ålder</label><input type="number" id="p-age" placeholder="46"></div>
-          <div class="profile-input"><label>Vikt (kg)</label><input type="number" id="p-weight" placeholder="75"></div>
-          <div class="profile-input"><label>Timmar/vecka</label><input type="number" id="p-hours" placeholder="10"></div>
+          <div class="profile-input"><label>Födelsedatum</label><input type="date" id="p-birthdate" placeholder="1973-05-15"></div>
+          <div class="profile-input"><label>Max träningstimmar/vecka</label><input type="number" id="p-hours" placeholder="10"></div>
         </div>
-        <div class="profile-input"><label>Nästa tävling</label><input type="text" id="p-race" placeholder="Ironman Kalmar, 15 aug 2026"></div>
+        <div style="margin-top:0.5rem">
+          <label style="display:block;font-size:0.8rem;color:var(--text-dim);margin-bottom:0.3rem">Kommande tävlingar</label>
+          <div id="race-list"></div>
+          <div style="display:flex;gap:0.3rem;margin-top:0.3rem">
+            <input type="text" id="race-name" placeholder="Ironman Kalmar, 15 aug 2026" style="flex:3;font-size:0.8rem;padding:0.4rem 0.6rem">
+            <select id="race-prio" style="flex:1;font-size:0.8rem;padding:0.4rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text)">
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+            </select>
+            <button class="btn btn-sm" onclick="addRace()" style="padding:0.4rem 0.8rem;font-size:0.8rem">+</button>
+          </div>
+        </div>
         <button class="btn btn-sm" onclick="saveAthleteProfile()" style="margin-top:0.5rem">Spara</button>
       </div>
 
@@ -571,17 +582,7 @@ input:focus { border-color: var(--accent); }
         </div>
       </div>
 
-      <div class="profile-section" id="zones-edit-section">
-        <h3>Nyckeltal</h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-          <div class="profile-input"><label>FTP (watt)</label><input type="number" id="z-ftp" placeholder="280"></div>
-          <div class="profile-input"><label>CSS (/100m)</label><input type="text" id="z-css" placeholder="1:45"></div>
-          <div class="profile-input"><label>Tröskelfart (/km)</label><input type="text" id="z-pace" placeholder="4:30"></div>
-          <div class="profile-input"><label>Tröskelpuls</label><input type="number" id="z-thr" placeholder="165"></div>
-          <div class="profile-input"><label>Max puls</label><input type="number" id="z-max" placeholder="185"></div>
-        </div>
-        <button class="btn btn-sm" onclick="saveZones()" style="margin-top:0.5rem">Spara nyckeltal</button>
-      </div>
+      <!-- Nyckeltal visas nu i Hälsa & kropp-listan ovan som pinnade entries -->
 
       <div class="profile-section">
         <h3>Strava-koppling</h3>
@@ -1581,19 +1582,11 @@ async function renderProfile() {
       document.getElementById('icu-key').value = d.profile.intervals_api_key || '';
       document.getElementById('icu-athlete').value = d.profile.intervals_athlete_id || '';
       // Zones
-      document.getElementById('z-ftp').value = d.profile.ftp || '';
-      document.getElementById('z-css').value = d.profile.css_per_100m || '';
-      document.getElementById('z-pace').value = d.profile.threshold_pace || '';
-      document.getElementById('z-thr').value = d.profile.threshold_hr || '';
-      document.getElementById('z-max').value = d.profile.max_hr || '';
+      // Zones now shown in health data list as pinned entries
       // Athlete profile
       document.getElementById('p-level').value = d.profile.experience_level || '';
-      document.getElementById('p-age').value = d.profile.age || '';
-      document.getElementById('p-weight').value = d.profile.weight_kg || '';
-      document.getElementById('p-years').value = d.profile.years_training || '';
-      document.getElementById('p-im').value = d.profile.ironman_finishes || '';
+      document.getElementById('p-birthdate').value = d.profile.birthdate || '';
       document.getElementById('p-hours').value = d.profile.weekly_hours || '';
-      document.getElementById('p-race').value = d.profile.next_race_name || '';
       // Health & body
       renderHealthData(d.profile);
     }
@@ -1604,22 +1597,14 @@ async function renderProfile() {
 async function saveAthleteProfile() {
   const data = {};
   const level = document.getElementById('p-level').value;
-  const age = document.getElementById('p-age').value;
-  const weight = document.getElementById('p-weight').value;
-  const years = document.getElementById('p-years').value;
-  const im = document.getElementById('p-im').value;
+  const birthdate = document.getElementById('p-birthdate').value;
   const hours = document.getElementById('p-hours').value;
-  const race = document.getElementById('p-race').value;
   if (level) data.experience_level = level;
-  if (age) data.age = parseInt(age);
-  if (weight) data.weight_kg = parseFloat(weight);
-  if (years) data.years_training = parseInt(years);
-  if (im) data.ironman_finishes = parseInt(im);
+  if (birthdate) data.birthdate = birthdate;
   if (hours) data.weekly_hours = parseFloat(hours);
-  if (race) data.next_race_name = race;
   try {
     const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
-    alert(r.ok ? 'Profil sparad!' : 'Kunde inte spara');
+    alert(r.ok ? 'Sparat!' : 'Kunde inte spara');
   } catch (e) { alert('Fel: ' + e.message); }
 }
 
@@ -1860,8 +1845,49 @@ function showProfileTab(tab) {
   btns[tab === 'details' ? 0 : 1].classList.add('active');
 }
 
-// saveHealthProfile removed — all health data is now managed via
-// the unified list in "Trixa vet också" with pin/edit/add/remove
+// ── Races ──
+function renderRaces(profile) {
+  const el = document.getElementById('race-list');
+  const hd = profile.health_data || {};
+  const races = hd.races || [];
+  if (!races.length) { el.innerHTML = ''; return; }
+  const prioColors = {A: '#e74c3c', B: '#f5a623', C: '#2ecc71'};
+  el.innerHTML = races.map((r, i) =>
+    `<div style="display:flex;align-items:center;gap:0.4rem;padding:0.25rem 0;font-size:0.82rem">
+      <span style="background:${prioColors[r.prio] || '#666'};color:#fff;border-radius:4px;padding:1px 6px;font-size:0.7rem;font-weight:700">${r.prio}</span>
+      <span style="flex:1">${esc(r.name)}</span>
+      <span class="tag-x" onclick="removeRace(${i})" style="cursor:pointer;opacity:0.4;font-size:0.7rem">✕</span>
+    </div>`
+  ).join('');
+}
+
+async function addRace() {
+  const name = document.getElementById('race-name').value.trim();
+  const prio = document.getElementById('race-prio').value;
+  if (!name) return;
+  document.getElementById('race-name').value = '';
+  try {
+    const r = await fetch('/api/profile', {headers: hdrs()});
+    const d = await r.json();
+    const hd = d.profile?.health_data || {};
+    const races = hd.races || [];
+    races.push({name, prio});
+    await fetch('/api/profile/health-data', {method:'POST', headers:hdrs(), body:JSON.stringify({races})});
+    await renderProfile();
+  } catch (e) { console.error(e); }
+}
+
+async function removeRace(index) {
+  try {
+    const r = await fetch('/api/profile', {headers: hdrs()});
+    const d = await r.json();
+    const hd = d.profile?.health_data || {};
+    const races = hd.races || [];
+    races.splice(index, 1);
+    await fetch('/api/profile/health-data', {method:'POST', headers:hdrs(), body:JSON.stringify({races})});
+    await renderProfile();
+  } catch (e) { console.error(e); }
+}
 
 async function setSelfAssessment(val) {
   document.querySelectorAll('.smiley-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.val) === val));
@@ -1875,8 +1901,9 @@ function renderHealthData(profile) {
   // DominaTrixa toggle state
   const dominaEl = document.getElementById('domina-toggle');
   if (dominaEl) dominaEl.checked = isDomina();
-  // Status tags
+  // Status tags + races
   renderStatusTags(profile);
+  renderRaces(profile);
 
   // Self-assessment smileys
   if (profile.self_assessment) {
@@ -1894,14 +1921,22 @@ function renderHealthData(profile) {
   }
 
   // All health data in one unified list
-  // Merge legacy profile fields into health_data view
+  // Merge legacy profile fields + zones into health_data view
   const container = document.getElementById('health-data-list');
-  const INTERNAL_KEYS = new Set(['trixa_assessment', 'status_tags', 'session_ratings']);
+  const INTERNAL_KEYS = new Set(['trixa_assessment', 'status_tags', 'session_ratings', 'races']);
   const legacy = {};
+  // Trackable metrics (pinned)
+  if (profile.weight_kg) legacy.vikt = {value: profile.weight_kg + ' kg', noted_at: '', pinned: true};
   if (profile.gender) legacy.kön = {value: profile.gender, noted_at: '', pinned: true};
   if (profile.height_cm) legacy.längd = {value: profile.height_cm + ' cm', noted_at: '', pinned: true};
   if (profile.resting_hr) legacy.vilopuls = {value: profile.resting_hr + ' bpm', noted_at: '', pinned: true};
-  if (profile.weight_kg) legacy.vikt = {value: profile.weight_kg + ' kg', noted_at: '', pinned: true};
+  // Zones (pinned)
+  if (profile.ftp) legacy.ftp = {value: profile.ftp + ' watt', noted_at: '', pinned: true};
+  if (profile.css_per_100m) legacy.css = {value: profile.css_per_100m + ' /100m', noted_at: '', pinned: true};
+  if (profile.threshold_pace) legacy.tröskelfart = {value: profile.threshold_pace + ' /km', noted_at: '', pinned: true};
+  if (profile.threshold_hr) legacy.tröskelpuls = {value: profile.threshold_hr + ' bpm', noted_at: '', pinned: true};
+  if (profile.max_hr) legacy.maxpuls = {value: profile.max_hr + ' bpm', noted_at: '', pinned: true};
+  // Health info
   if (profile.blood_pressure) legacy.blodtryck = {value: profile.blood_pressure, noted_at: ''};
   if (profile.medications) legacy.mediciner = {value: profile.medications, noted_at: ''};
   if (profile.injuries) legacy.skador = {value: profile.injuries, noted_at: ''};
