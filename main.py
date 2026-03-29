@@ -311,6 +311,54 @@ async def signup(req: AuthRequest):
         raise HTTPException(400, str(e))
 
 
+@app.post("/api/auth/reset-password")
+async def reset_password(request: Request):
+    """Send a password reset email via Supabase."""
+    try:
+        body = await request.json()
+        email = body.get("email", "").strip()
+        if not email:
+            raise HTTPException(400, "E-post krävs")
+        client = db.get_client()
+        client.auth.reset_password_email(email, {
+            "redirect_to": os.environ.get("SITE_URL", "https://trixa.up.railway.app"),
+        })
+        return {"ok": True, "message": "Återställningslänk skickad"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/auth/update-password")
+async def update_password(request: Request):
+    """Update password using the recovery access token."""
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.replace("Bearer ", "").strip()
+        if not token:
+            raise HTTPException(401, "Ingen token")
+        body = await request.json()
+        pw = body.get("password", "")
+        if len(pw) < 6:
+            raise HTTPException(400, "Lösenordet måste vara minst 6 tecken")
+        client = db.get_admin_client()
+        # Decode the JWT to get the user id (no extra dependency)
+        import base64, json as _json
+        parts = token.split(".")
+        padded = parts[1] + "=="
+        payload = _json.loads(base64.urlsafe_b64decode(padded))
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(401, "Ogiltig token")
+        client.auth.admin.update_user_by_id(user_id, {"password": pw})
+        return {"ok": True, "message": "Lösenord uppdaterat"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
 @app.post("/api/auth/refresh")
 async def refresh_token(request: Request):
     """Refresh an expired access token using refresh_token."""
