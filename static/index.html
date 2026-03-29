@@ -283,6 +283,9 @@ input:focus { border-color: var(--accent); }
 .profile-input { margin-bottom: 0.6rem; }
 .profile-input label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.3rem; }
 .profile-input input, .profile-input select { font-size: 0.9rem; padding: 0.6rem 0.8rem; }
+.profile-subtabs { display: flex; gap: 0; margin-bottom: 0.8rem; background: var(--surface); border-radius: 10px; padding: 3px; }
+.profile-subtabs button { flex: 1; padding: 0.5rem; border: none; background: none; color: var(--text-dim); font-size: 0.85rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+.profile-subtabs button.active { background: var(--accent); color: #fff; }
 .smiley-btn { background: var(--surface); border: 2px solid transparent; border-radius: 10px; padding: 0.3rem 0.5rem; cursor: pointer; transition: border-color 0.2s, transform 0.1s; min-width: 44px; min-height: 44px; font-size: 1.4rem; }
 .smiley-btn.active { border-color: var(--accent); transform: scale(1.15); }
 .smiley-btn:hover { border-color: var(--accent); }
@@ -434,40 +437,21 @@ input:focus { border-color: var(--accent); }
   <!-- PROFIL -->
   <div id="profile-view" class="view">
     <div class="header"><h1>Profil</h1></div>
-    <div class="profile-section" id="profile-info"></div>
 
-    <div class="profile-section" id="athlete-edit-section">
-      <h3>Om dig</h3>
-      <div class="profile-input"><label>Erfarenhetsnivå</label>
-        <select id="p-level" style="width:100%;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-size:0.9rem">
-          <option value="">Valj...</option>
-          <option value="beginner">Nyborjare</option>
-          <option value="intermediate">Motionar</option>
-          <option value="advanced">Avancerad</option>
-        </select>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-        <div class="profile-input"><label>Ålder</label><input type="number" id="p-age" placeholder="46"></div>
-        <div class="profile-input"><label>Vikt (kg)</label><input type="number" id="p-weight" placeholder="75"></div>
-        <div class="profile-input"><label>År med träning</label><input type="number" id="p-years" placeholder="12"></div>
-        <div class="profile-input"><label>Ironman-starter</label><input type="number" id="p-im" placeholder="13"></div>
-        <div class="profile-input"><label>Timmar/vecka</label><input type="number" id="p-hours" placeholder="10"></div>
-      </div>
-      <div class="profile-input"><label>Nästa tävling</label><input type="text" id="p-race" placeholder="Ironman Kalmar, 15 aug 2026"></div>
-      <div class="profile-input"><label>Hälsoanteckningar</label><input type="text" id="p-health" placeholder="T.ex. ont i handleden, Levaxin"></div>
-      <button class="btn btn-sm" onclick="saveAthleteProfile()" style="margin-top:0.5rem">Spara profil</button>
+    <!-- Sub-tabs -->
+    <div class="profile-subtabs">
+      <button class="active" onclick="showProfileTab('overview')">Översikt</button>
+      <button onclick="showProfileTab('details')">Detaljer</button>
     </div>
 
-    <div class="profile-section" id="health-body-section">
-      <h3>Hälsa &amp; kropp</h3>
-      <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:0.8rem;line-height:1.4">
-        Har du fler data? Berätta för Trixa i chatten så lägger hon till dem i listan nedan.
-      </p>
+    <!-- ═══ ÖVERSIKT ═══ -->
+    <div id="profile-overview">
+      <div class="profile-section" id="profile-info"></div>
 
-      <!-- Self-assessment smileys -->
-      <div style="margin-bottom:1rem">
-        <label style="display:block;font-size:0.8rem;color:var(--text-dim);margin-bottom:0.4rem">Hur känner du dig just nu?</label>
-        <div style="display:flex;gap:0.4rem;align-items:center">
+      <!-- Formbedömning -->
+      <div class="profile-section">
+        <h3>Hur mår du?</h3>
+        <div style="display:flex;gap:0.3rem;margin-bottom:0.3rem">
           <div id="self-assessment" style="display:flex;gap:0.3rem">
             <button class="smiley-btn" data-val="1" onclick="setSelfAssessment(1)">&#128555;</button>
             <button class="smiley-btn" data-val="2" onclick="setSelfAssessment(2)">&#128543;</button>
@@ -476,93 +460,130 @@ input:focus { border-color: var(--accent); }
             <button class="smiley-btn" data-val="5" onclick="setSelfAssessment(5)">&#128516;</button>
           </div>
         </div>
-        <div id="trixa-assessment" style="font-size:0.78rem;color:var(--text-dim);margin-top:0.3rem"></div>
+        <div id="trixa-assessment" style="font-size:0.78rem;color:var(--text-dim)"></div>
       </div>
 
-      <!-- Fixed health fields -->
-      <div class="profile-input">
-        <label>Kön</label>
-        <select id="p-gender" style="width:100%;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-size:0.9rem">
-          <option value="">Välj...</option>
-          <option value="man">Man</option>
-          <option value="kvinna">Kvinna</option>
-          <option value="annat">Annat</option>
-          <option value="vill ej ange">Vill ej ange</option>
-        </select>
+      <!-- Om dig (essentials only) -->
+      <div class="profile-section" id="athlete-edit-section">
+        <h3>Om dig</h3>
+        <div class="profile-input"><label>Erfarenhetsnivå</label>
+          <select id="p-level" style="width:100%;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-size:0.9rem">
+            <option value="">Välj...</option>
+            <option value="beginner">Nybörjare</option>
+            <option value="intermediate">Motionär</option>
+            <option value="advanced">Avancerad</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          <div class="profile-input"><label>Ålder</label><input type="number" id="p-age" placeholder="46"></div>
+          <div class="profile-input"><label>Vikt (kg)</label><input type="number" id="p-weight" placeholder="75"></div>
+          <div class="profile-input"><label>Timmar/vecka</label><input type="number" id="p-hours" placeholder="10"></div>
+        </div>
+        <div class="profile-input"><label>Nästa tävling</label><input type="text" id="p-race" placeholder="Ironman Kalmar, 15 aug 2026"></div>
+        <button class="btn btn-sm" onclick="saveAthleteProfile()" style="margin-top:0.5rem">Spara</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-        <div class="profile-input"><label>Längd (cm)</label><input type="number" id="p-height" placeholder="178"></div>
-        <div class="profile-input"><label>Vilopuls</label><input type="number" id="p-resting" placeholder="52"></div>
-        <div class="profile-input"><label>Blodtryck</label><input type="text" id="p-bp" placeholder="120/80"></div>
-      </div>
-      <div class="profile-input"><label>Mediciner</label><input type="text" id="p-meds" placeholder="T.ex. Levaxin, Metformin"></div>
-      <div class="profile-input"><label>Skador / begränsningar</label><input type="text" id="p-injuries" placeholder="T.ex. ont i vänster knä sedan mars"></div>
-      <button class="btn btn-sm" onclick="saveHealthProfile()" style="margin-top:0.5rem">Spara hälsodata</button>
 
-      <!-- Trixa vet också (read-only dynamic data) -->
-      <div id="trixa-health-data" style="margin-top:1rem;display:none">
-        <h4 style="font-size:0.85rem;opacity:0.7;margin-bottom:0.5rem">Trixa vet också:</h4>
-        <div id="health-data-list"></div>
+      <!-- Strava status -->
+      <div class="profile-section" id="strava-section">
+        <h3>Strava</h3>
+        <div id="strava-status"></div>
+      </div>
+
+      <!-- Membership -->
+      <div class="profile-section" id="membership-section"></div>
+
+      <div style="margin-top:1rem;display:flex;gap:0.5rem">
+        <button class="btn btn-secondary btn-sm" onclick="newConversation()" style="flex:1">Ny konversation</button>
+        <button class="btn btn-danger btn-sm" onclick="doLogout()" style="flex:1">Logga ut</button>
       </div>
     </div>
 
-    <div class="profile-section" id="strava-section">
-      <h3>Strava</h3>
-      <div id="strava-status"></div>
-    </div>
+    <!-- ═══ DETALJER ═══ -->
+    <div id="profile-details" style="display:none">
 
-    <div class="profile-section" id="zones-edit-section">
-      <h3>Nyckeltal</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-        <div class="profile-input"><label>FTP (watt)</label><input type="number" id="z-ftp" placeholder="280"></div>
-        <div class="profile-input"><label>CSS (/100m)</label><input type="text" id="z-css" placeholder="1:45"></div>
-        <div class="profile-input"><label>Tröskelfart (/km)</label><input type="text" id="z-pace" placeholder="4:30"></div>
-        <div class="profile-input"><label>Tröskelpuls</label><input type="number" id="z-thr" placeholder="165"></div>
-        <div class="profile-input"><label>Max puls</label><input type="number" id="z-max" placeholder="185"></div>
-      </div>
-      <button class="btn btn-sm" onclick="saveZones()" style="margin-top:0.5rem">Spara nyckeltal</button>
-    </div>
+      <div class="profile-section">
+        <h3>Hälsa &amp; kropp</h3>
+        <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:0.8rem;line-height:1.4">
+          Har du fler data? Berätta för Trixa i chatten så lägger hon till dem nedan.
+        </p>
+        <div class="profile-input">
+          <label>Kön</label>
+          <select id="p-gender" style="width:100%;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-size:0.9rem">
+            <option value="">Välj...</option>
+            <option value="man">Man</option>
+            <option value="kvinna">Kvinna</option>
+            <option value="annat">Annat</option>
+            <option value="vill ej ange">Vill ej ange</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          <div class="profile-input"><label>Längd (cm)</label><input type="number" id="p-height" placeholder="178"></div>
+          <div class="profile-input"><label>Vilopuls</label><input type="number" id="p-resting" placeholder="52"></div>
+          <div class="profile-input"><label>Blodtryck</label><input type="text" id="p-bp" placeholder="120/80"></div>
+          <div class="profile-input"><label>År med träning</label><input type="number" id="p-years" placeholder="12"></div>
+          <div class="profile-input"><label>Ironman-starter</label><input type="number" id="p-im" placeholder="13"></div>
+        </div>
+        <div class="profile-input"><label>Mediciner</label><input type="text" id="p-meds" placeholder="T.ex. Levaxin, Metformin"></div>
+        <div class="profile-input"><label>Skador / begränsningar</label><input type="text" id="p-injuries" placeholder="T.ex. ont i vänster knä sedan mars"></div>
+        <div class="profile-input"><label>Hälsoanteckningar</label><input type="text" id="p-health" placeholder="Övrigt"></div>
+        <button class="btn btn-sm" onclick="saveHealthProfile();saveAthleteProfile()" style="margin-top:0.5rem">Spara</button>
 
-    <div class="profile-section">
-      <h3>Strava</h3>
-      <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:0.5rem">
-        Skapa en app pa <a href="https://www.strava.com/settings/api" target="_blank" style="color:var(--accent)">strava.com/settings/api</a>.
-        Ange <b>trixa.up.railway.app</b> som callback-doman.
+        <!-- Trixa vet också -->
+        <div id="trixa-health-data" style="margin-top:1rem;display:none">
+          <h4 style="font-size:0.85rem;opacity:0.7;margin-bottom:0.5rem">Trixa vet också:</h4>
+          <div id="health-data-list"></div>
+        </div>
       </div>
-      <div class="profile-input">
-        <label>Client ID</label>
-        <input type="text" id="strava-cid" placeholder="t.ex. 212075">
-      </div>
-      <div class="profile-input">
-        <label>Client Secret</label>
-        <input type="password" id="strava-secret">
-      </div>
-      <button class="btn btn-sm" onclick="saveStravaCreds()">Spara</button>
-    </div>
 
-    <div class="profile-section">
-      <h3>Intervals.icu</h3>
-      <div class="profile-input">
-        <label>API-nyckel</label>
-        <input type="password" id="icu-key">
+      <div class="profile-section" id="zones-edit-section">
+        <h3>Nyckeltal</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          <div class="profile-input"><label>FTP (watt)</label><input type="number" id="z-ftp" placeholder="280"></div>
+          <div class="profile-input"><label>CSS (/100m)</label><input type="text" id="z-css" placeholder="1:45"></div>
+          <div class="profile-input"><label>Tröskelfart (/km)</label><input type="text" id="z-pace" placeholder="4:30"></div>
+          <div class="profile-input"><label>Tröskelpuls</label><input type="number" id="z-thr" placeholder="165"></div>
+          <div class="profile-input"><label>Max puls</label><input type="number" id="z-max" placeholder="185"></div>
+        </div>
+        <button class="btn btn-sm" onclick="saveZones()" style="margin-top:0.5rem">Spara nyckeltal</button>
       </div>
-      <div class="profile-input">
-        <label>Athlete ID</label>
-        <input type="text" id="icu-athlete" placeholder="t.ex. i12345">
+
+      <div class="profile-section">
+        <h3>Strava-koppling</h3>
+        <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:0.5rem">
+          Skapa en app på <a href="https://www.strava.com/settings/api" target="_blank" style="color:var(--accent)">strava.com/settings/api</a>.
+          Ange <b>trixa.up.railway.app</b> som callback-domän.
+        </div>
+        <div class="profile-input">
+          <label>Client ID</label>
+          <input type="text" id="strava-cid" placeholder="t.ex. 212075">
+        </div>
+        <div class="profile-input">
+          <label>Client Secret</label>
+          <input type="password" id="strava-secret">
+        </div>
+        <button class="btn btn-sm" onclick="saveStravaCreds()">Spara</button>
       </div>
-      <button class="btn btn-sm" onclick="saveIntervals()">Spara</button>
-    </div>
-    <div class="profile-section" id="membership-section"></div>
-    <div class="profile-section" id="discount-section">
-      <h3>Rabattkod</h3>
-      <div style="display:flex;gap:0.5rem">
-        <input type="text" id="discount-input" placeholder="Ange kod" style="flex:1;text-transform:uppercase">
-        <button class="btn btn-sm" onclick="applyDiscount()">Aktivera</button>
+
+      <div class="profile-section">
+        <h3>Intervals.icu</h3>
+        <div class="profile-input">
+          <label>API-nyckel</label>
+          <input type="password" id="icu-key">
+        </div>
+        <div class="profile-input">
+          <label>Athlete ID</label>
+          <input type="text" id="icu-athlete" placeholder="t.ex. i12345">
+        </div>
+        <button class="btn btn-sm" onclick="saveIntervals()">Spara</button>
       </div>
-    </div>
-    <div style="margin-top:1rem;display:flex;gap:0.5rem">
-      <button class="btn btn-secondary btn-sm" onclick="newConversation()" style="flex:1">Ny konversation</button>
-      <button class="btn btn-danger btn-sm" onclick="doLogout()" style="flex:1">Logga ut</button>
+
+      <div class="profile-section" id="discount-section">
+        <h3>Rabattkod</h3>
+        <div style="display:flex;gap:0.5rem">
+          <input type="text" id="discount-input" placeholder="Ange kod" style="flex:1;text-transform:uppercase">
+          <button class="btn btn-sm" onclick="applyDiscount()">Aktivera</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1500,6 +1521,14 @@ async function saveAthleteProfile() {
     const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
     alert(r.ok ? 'Profil sparad!' : 'Kunde inte spara');
   } catch (e) { alert('Fel: ' + e.message); }
+}
+
+function showProfileTab(tab) {
+  document.querySelectorAll('.profile-subtabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('profile-overview').style.display = tab === 'overview' ? 'block' : 'none';
+  document.getElementById('profile-details').style.display = tab === 'details' ? 'block' : 'none';
+  const btns = document.querySelectorAll('.profile-subtabs button');
+  btns[tab === 'overview' ? 0 : 1].classList.add('active');
 }
 
 async function saveHealthProfile() {
