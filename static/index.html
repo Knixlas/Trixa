@@ -1028,7 +1028,8 @@ async function renderNextStrength() {
     } catch {}
 
     if (s.exercises && s.exercises.length > 0) {
-      html += '<table class="strength-table"><thead><tr><th>Övning</th><th>Detaljer</th><th style="width:90px">Gjord?</th></tr></thead><tbody>';
+      html += '<div style="display:flex;justify-content:flex-end;gap:0.5rem;font-size:0.65rem;color:var(--text-dim);margin-bottom:0.3rem;padding-right:0.2rem">💚 Lätt &nbsp; 💛 Medel &nbsp; 🟠 Tung &nbsp; 🔴 Max</div>';
+      html += '<table class="strength-table"><thead><tr><th>Övning</th><th>Detaljer</th><th style="width:90px">Känsla</th></tr></thead><tbody>';
       for (const ex of s.exercises) {
         let detail = '';
         if (ex.weights && ex.weights.length > 0) {
