@@ -1415,6 +1415,40 @@ VIKTIGT: Om det finns genomforda pass idag, kommentera DEM — inte planerade pa
         except Exception:
             pass
 
+        # Generate daily health note (status assessment)
+        try:
+            health_data = profile.get("health_data", {}) if profile else {}
+            status_tags = health_data.get("status_tags", []) if isinstance(health_data, dict) else []
+            current_notes = profile.get("health_notes", "") if profile else ""
+
+            note_response = api_client.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=200,
+                system=f"""Du ar en tranares interna anteckningsbok. Skriv en kort nulagebedoming (2-4 meningar) om atletens halsostatus baserat pa all tillganglig data.
+
+Regler:
+- Fakta, inte fragor. Koncist och kliniskt.
+- Inkludera: formkurva, skadestatus, belastning, recovery-behov
+- Om status_tags finns: kommentera dem
+- Skriv pa svenska
+- INGA hallningar eller artigheter. Bara analys.
+
+Idag ar {weekday} {now.strftime('%Y-%m-%d')}.""",
+                messages=[{"role": "user", "content": f"""Atlet: {name}
+Senaste 14 dagars traning: {chr(10).join(act_lines[:7]) if act_lines else 'Ingen data'}
+Dagens pass: {today_done or 'Inget'}
+Status-taggar: {', '.join(status_tags) if status_tags else 'Inga'}
+Tidigare anteckning: {current_notes or 'Ingen'}
+
+Skriv en uppdaterad halsoanteckning."""}],
+            )
+            new_note = note_response.content[0].text.strip()
+            if new_note and len(new_note) > 10:
+                db.update_profile(uid, token, {"health_notes": new_note})
+                print(f"[health_note] Updated for {uid[:8]}")
+        except Exception as e:
+            print(f"Health note error: {e}")
+
         return {"brief": brief_text, "follow_up": follow_up}
     except Exception as e:
         print(f"Coach brief error: {e}")
