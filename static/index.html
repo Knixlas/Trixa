@@ -567,7 +567,6 @@ input:focus { border-color: var(--accent); }
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
           <div class="profile-input"><label>Längd (cm)</label><input type="number" id="p-height" placeholder="178"></div>
           <div class="profile-input"><label>Vilopuls</label><input type="number" id="p-resting" placeholder="52"></div>
-          <div class="profile-input"><label>Blodtryck</label><input type="text" id="p-bp" placeholder="120/80"></div>
           <div class="profile-input"><label>År med träning</label><input type="number" id="p-years" placeholder="12"></div>
           <div class="profile-input"><label>Ironman-starter</label><input type="number" id="p-im" placeholder="13"></div>
         </div>
@@ -1828,18 +1827,15 @@ async function saveHealthProfile() {
   const gender = document.getElementById('p-gender').value;
   const height = document.getElementById('p-height').value;
   const resting = document.getElementById('p-resting').value;
-  const bp = document.getElementById('p-bp').value;
   if (gender) data.gender = gender;
   if (height) data.height_cm = parseInt(height);
   if (resting) data.resting_hr = parseInt(resting);
-  if (bp) data.blood_pressure = bp;
   try {
     const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
     if (!r.ok) { alert('Kunde inte spara'); return; }
     // Log trackable values with timestamp in health_data
     const today = new Date().toISOString().slice(0, 10);
     const logData = {};
-    if (bp) logData.blodtryck_log = {value: bp, date: today};
     if (resting) logData.vilopuls_log = {value: parseInt(resting), date: today};
     if (Object.keys(logData).length > 0) {
       await fetch('/api/profile/health-log', {
@@ -1869,7 +1865,6 @@ function renderHealthData(profile) {
   if (profile.gender) document.getElementById('p-gender').value = profile.gender;
   if (profile.height_cm) document.getElementById('p-height').value = profile.height_cm;
   if (profile.resting_hr) document.getElementById('p-resting').value = profile.resting_hr;
-  if (profile.blood_pressure) document.getElementById('p-bp').value = profile.blood_pressure;
 
   // Self-assessment smileys
   if (profile.self_assessment) {
