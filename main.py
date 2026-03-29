@@ -643,7 +643,9 @@ async def chat(req: ChatRequest, request: Request):
         clean.append({"role": "user", "content": req.message})
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    tools = get_all_tools() if can_use_feature(tier, "workout_export") else None
+    # Tools always enabled — plan, profile, goals, zones are core features
+    # Workout export to Intervals.icu is gated separately in the tool handler
+    tools = get_all_tools()
 
     # Non-streaming when tools enabled (to handle tool_use blocks)
     if tools:
