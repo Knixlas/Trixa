@@ -1739,25 +1739,11 @@ async function addHealthDataEntry() {
   } catch (e) { alert('Fel: ' + e.message); }
 }
 
-async function togglePinHealthData(key) {
-  try {
-    const r = await fetch('/api/profile', {headers: hdrs()});
-    const d = await r.json();
-    const hd = d.profile?.health_data || {};
-    const entry = hd[key];
-    if (typeof entry === 'object' && entry !== null && !Array.isArray(entry)) {
-      entry.pinned = !entry.pinned;
-      if (!entry.pinned) delete entry.pinned;
-    }
-    await fetch('/api/profile', {method: 'POST', headers: hdrs(), body: JSON.stringify({health_data: hd})});
-    await renderProfile();
-  } catch (e) { console.error(e); }
-}
 
 async function editHealthDataInline(key, btn) {
   const row = btn.closest('.health-data-item');
   const valSpan = row.querySelector('.hd-val');
-  const currentVal = valSpan.textContent.trim().split(/\s{2,}/)[0]; // strip date
+  const currentVal = valSpan.textContent.trim().split(/\s{2}/)[0]; // strip date
   const input = document.createElement('input');
   input.type = 'text';
   input.value = currentVal;
@@ -1767,19 +1753,27 @@ async function editHealthDataInline(key, btn) {
   input.focus();
   input.onblur = input.onkeydown = async (e) => {
     if (e.type === 'keydown' && e.key !== 'Enter') return;
+    if (e.type === 'keydown') e.preventDefault();
     const newVal = input.value.trim();
-    if (!newVal) return;
+    if (!newVal) { await renderProfile(); return; }
     const today = new Date().toISOString().slice(0, 10);
     try {
       await fetch('/api/profile/health-data', {
         method: 'POST', headers: hdrs(),
-        body: JSON.stringify({[key]: {value: newVal, noted_at: today, pinned: true}}),
+        body: JSON.stringify({[key]: {value: newVal, noted_at: today}}),
       });
-      // Also log history for pinned values
-      await fetch('/api/profile/health-log', {
-        method: 'POST', headers: hdrs(),
-        body: JSON.stringify({[key + '_log']: {value: newVal, date: today}}),
-      });
+      // Sync back to legacy columns for known keys
+      const LEGACY_MAP = {vikt:'weight_kg', kön:'gender', längd:'height_cm', vilopuls:'resting_hr',
+        ftp:'ftp', css:'css_per_100m', tröskelfart:'threshold_pace', tröskelpuls:'threshold_hr',
+        maxpuls:'max_hr', blodtryck:'blood_pressure'};
+      const legacyCol = LEGACY_MAP[key];
+      if (legacyCol) {
+        // Strip unit suffixes for numeric columns
+        let rawVal = newVal.replace(/\s*(kg|cm|bpm|watt|\/100m|\/km)$/i, '').trim();
+        const numVal = parseFloat(rawVal);
+        const syncData = {[legacyCol]: isNaN(numVal) ? rawVal : numVal};
+        await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(syncData)});
+      }
       await renderProfile();
     } catch (err) { console.error(err); }
   };
@@ -1928,77 +1922,56 @@ function renderHealthData(profile) {
   }
 
   // All health data in one unified list
-  // Build categorized health data display
+  // Build categorized health data display — ALL from health_data only
   const container = document.getElementById('health-data-list');
   const INTERNAL_KEYS = new Set(['trixa_assessment', 'status_tags', 'session_ratings', 'races',
     'vilopuls_log', 'blodtryck_log', 'langd_log', 'mediciner_log', 'medicin_log']);
-
-  // Define categories with their entries
-  const basdata = [];
-  const prestation = [];
-  const halsa = [];
-
-  // Legacy profile fields → categories
-  if (profile.gender) basdata.push({key: '_gender', label: 'Kön', val: profile.gender});
-  if (profile.height_cm) basdata.push({key: '_height_cm', label: 'Längd', val: profile.height_cm + ' cm'});
-  if (profile.weight_kg) basdata.push({key: '_weight_kg', label: 'Vikt', val: profile.weight_kg + ' kg'});
-  if (profile.years_training) basdata.push({key: '_years', label: 'År med träning', val: profile.years_training});
-  if (profile.ironman_finishes) basdata.push({key: '_im', label: 'Ironman-starter', val: profile.ironman_finishes});
-
-  if (profile.ftp) prestation.push({key: '_ftp', label: 'FTP', val: profile.ftp + ' watt'});
-  if (profile.css_per_100m) prestation.push({key: '_css', label: 'CSS', val: profile.css_per_100m + ' /100m'});
-  if (profile.threshold_pace) prestation.push({key: '_pace', label: 'Tröskelfart', val: profile.threshold_pace + ' /km'});
-  if (profile.threshold_hr) prestation.push({key: '_thr', label: 'Tröskelpuls', val: profile.threshold_hr + ' bpm'});
-  if (profile.max_hr) prestation.push({key: '_max', label: 'Maxpuls', val: profile.max_hr + ' bpm'});
-
-  if (profile.resting_hr) halsa.push({key: '_resting', label: 'Vilopuls', val: profile.resting_hr + ' bpm'});
-  if (profile.blood_pressure) halsa.push({key: '_bp', label: 'Blodtryck', val: profile.blood_pressure});
-  if (profile.medications) halsa.push({key: '_meds', label: 'Mediciner', val: profile.medications});
-  if (profile.injuries) halsa.push({key: '_injuries', label: 'Skador', val: profile.injuries});
-
-  // health_data entries → categorize by known keys or default to hälsa
   const PRESTATION_KEYS = new Set(['ftp', 'css', 'tröskelfart', 'tröskelpuls', 'maxpuls', 'vo2max', 'laktat']);
-  const BASDATA_KEYS = new Set(['kön', 'längd', 'vikt', 'ålder']);
+  const BASDATA_KEYS = new Set(['kön', 'längd', 'vikt', 'ålder', 'år_med_träning', 'ironman_starter']);
+
+  const basdata = [], prestation = [], halsa = [];
+
   for (const [k, v] of Object.entries(hd)) {
     if (INTERNAL_KEYS.has(k)) continue;
     let val, dateStr = '';
     if (Array.isArray(v)) {
       const latest = v[v.length - 1];
       val = typeof latest === 'object' ? latest.value : latest;
-      dateStr = typeof latest === 'object' && latest.date ? ` (${latest.date})` : '';
+      dateStr = typeof latest === 'object' && latest.date ? latest.date : '';
       if (v.length > 1) dateStr += ` · ${v.length} mätningar`;
     } else if (typeof v === 'object' && v !== null) {
-      val = v.value || JSON.stringify(v);
-      if (v.noted_at) dateStr = ` (${v.noted_at})`;
+      val = v.value != null ? v.value : JSON.stringify(v);
+      if (v.noted_at) dateStr = v.noted_at;
     } else {
       val = String(v);
     }
     const label = k.replace(/_\d+$/, '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
     const baseKey = k.replace(/_\d+$/, '').toLowerCase();
-    const entry = {key: k, label, val: String(val), dateStr, fromHD: true};
+    const entry = {key: k, label, val: String(val), dateStr};
     if (PRESTATION_KEYS.has(baseKey)) prestation.push(entry);
     else if (BASDATA_KEYS.has(baseKey)) basdata.push(entry);
     else halsa.push(entry);
   }
 
-  // Hälsoanteckningar (special — shown as block text)
+  // Hälsoanteckningar (Trixa's daily note)
   const healthNotes = profile.health_notes || '';
 
-  // Render
   function renderCategory(title, items) {
-    if (!items.length && !healthNotes && title !== 'Hälsa') return '';
+    if (!items.length && !(title === 'Hälsa' && healthNotes)) return '';
     let html = `<div style="font-size:0.7rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0.7rem 0 0.3rem;padding-top:0.3rem;border-top:1px solid rgba(255,255,255,0.06)">${title}</div>`;
     for (const item of items) {
-      const del = item.fromHD ? `<span class="tag-x" onclick="removeHealthDataEntry('${item.key}')" title="Ta bort">✕</span>` : '';
-      const date = item.dateStr || '';
       html += `<div class="health-data-item">
         <span class="hd-key">${esc(item.label)}</span>
-        <span class="hd-val">${esc(item.val)}${date ? ` <span style="opacity:0.4">${date}</span>` : ''}</span>
-        <span class="hd-actions">${del}</span>
+        <span class="hd-val">${esc(item.val)}${item.dateStr ? ` <span style="opacity:0.4">${item.dateStr}</span>` : ''}</span>
+        <span class="hd-actions">
+          <span class="hd-edit" onclick="editHealthDataInline('${item.key}',this)" title="Ändra">✏️</span>
+          <span class="tag-x" onclick="removeHealthDataEntry('${item.key}')" title="Ta bort">✕</span>
+        </span>
       </div>`;
     }
     if (title === 'Hälsa' && healthNotes) {
-      html += `<div style="font-size:0.8rem;color:var(--text-dim);padding:0.4rem 0;line-height:1.4;font-style:italic">${esc(healthNotes)}</div>`;
+      html += `<div style="font-size:0.78rem;color:var(--text-dim);padding:0.5rem 0;line-height:1.5;font-style:italic;border-top:1px solid rgba(255,255,255,0.04);margin-top:0.3rem">
+        <span style="font-weight:600;font-style:normal;opacity:0.6">Trixas bedömning:</span><br>${esc(healthNotes)}</div>`;
     }
     return html;
   }
