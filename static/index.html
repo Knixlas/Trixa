@@ -383,7 +383,7 @@ input:focus { border-color: var(--accent); }
     <!-- Mal (collapsed) -->
     <div class="section-card" id="card-goals">
       <div class="section-header" onclick="toggleSection('card-goals')">
-        <h3>&#x1F3AF; Mal</h3><span class="chevron">&#x25B6;</span>
+        <h3>&#x1F3AF; Mål</h3><span class="chevron">&#x25B6;</span>
       </div>
       <div class="section-body" id="goals-body">
         <div style="color:var(--text-dim);font-size:0.85rem">Laddar...</div>
@@ -786,11 +786,11 @@ async function renderGoals() {
     }
     let html = '';
     if (g.vision) html += `<div class="goal-item"><div class="goal-label">Vision</div><div class="goal-text">${esc(g.vision)}</div></div>`;
-    if (g.season_goal) html += `<div class="goal-item"><div class="goal-label">Sasongmal</div><div class="goal-text">${esc(g.season_goal)}</div></div>`;
+    if (g.season_goal) html += `<div class="goal-item"><div class="goal-label">Säsongsmål</div><div class="goal-text">${esc(g.season_goal)}</div></div>`;
     if (g.short_term_goal) html += `<div class="goal-item"><div class="goal-label">Kortsiktigt</div><div class="goal-text">${esc(g.short_term_goal)}</div></div>`;
     el.innerHTML = html;
   } catch {
-    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Kunde inte ladda mal</div>';
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Kunde inte ladda mål</div>';
   }
 }
 
@@ -813,9 +813,9 @@ async function fetchCoachBrief(refresh = false) {
 
 function renderBrief(data) {
   const tip = document.getElementById('tip-container');
-  let html = `<div class="tip-box"><div class="tip-label">Trixa sager</div><div class="tip-text">${md(data.brief)}</div>`;
+  let html = `<div class="tip-box"><div class="tip-label">Trixa säger</div><div class="tip-text">${md(data.brief)}</div>`;
   if (data.follow_up) {
-    html += `<div style="margin-top:0.4rem;font-size:0.75rem;opacity:0.7">&#x1F4C5; Uppfoljning: ${esc(data.follow_up)}</div>`;
+    html += `<div style="margin-top:0.4rem;font-size:0.75rem;opacity:0.7">&#x1F4C5; Uppföljning: ${esc(data.follow_up)}</div>`;
   }
   html += `</div>`;
   tip.innerHTML = html;
@@ -897,7 +897,9 @@ async function renderNextStrength() {
       }
       html += '</tbody></table>';
     } else if (s.details) {
-      html += `<div style="font-size:0.8rem;color:var(--text-dim);line-height:1.5">${esc(s.details)}</div>`;
+      // Split numbered exercises onto separate lines
+      const formatted = esc(s.details).replace(/(\d+)\.\s/g, '<br>$1. ').replace(/^<br>/, '');
+      html += `<div style="font-size:0.8rem;color:var(--text-dim);line-height:1.6">${formatted}</div>`;
     }
     el.innerHTML = html;
     // Always open the strength card when there's a session
@@ -1123,7 +1125,7 @@ async function sendMessage() {
       if (data.goals_update) {
         cachedGoals = null;
         renderGoals();
-        appendMsg('assistant', null, null, '<div style="color:var(--accent);font-size:0.85rem">&#x1F3AF; Mal uppdaterade!</div>');
+        appendMsg('assistant', null, null, '<div style="color:var(--accent);font-size:0.85rem">&#x1F3AF; Mål uppdaterade!</div>');
       }
       if (data.plan_saved) {
         cachedPlanStatus = null;
@@ -1157,7 +1159,7 @@ function showZonesProposal(zones) {
   const units = {ftp:'W', css_per_100m:'/100m', threshold_pace:'/km', threshold_hr:'bpm', max_hr:'bpm'};
   let rows = Object.entries(zones).map(([k,v]) => `${labels[k]||k}: <strong>${v}${units[k]||''}</strong>`).join('<br>');
   div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:0.7rem;margin-top:0.3rem">
-    <div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem">FORESLAGNA NYCKELTAL</div>
+    <div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem">FÖRESLAGNA NYCKELTAL</div>
     <div style="font-size:0.85rem;margin-bottom:0.5rem">${rows}</div>
     <div style="display:flex;gap:0.5rem">
       <button class="btn btn-sm" onclick="applyZonesUpdate(${esc(JSON.stringify(JSON.stringify(zones)))})">Uppdatera</button>

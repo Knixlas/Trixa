@@ -175,7 +175,7 @@ def get_plan_tool() -> dict:
                             "date": {"type": "string", "description": f"YYYY-MM-DD. Idag = {today}"},
                             "sport": {"type": "string", "description": "Lopning/Cykel/Sim/Styrka/Brick/Vila"},
                             "title": {"type": "string", "description": "Exakt det som visas pa Hem-sidan. T.ex. 'Styrka 30min + Lop 35min Z2' eller 'Vila'"},
-                            "details": {"type": "string", "description": "Zoninfo, intervaller, puls/watt-granser"},
+                            "details": {"type": "string", "description": "Zoninfo, intervaller, puls/watt-granser. ALDRIG anvand detta falt for styrkeovningar — de MASTE ligga i exercises-arrayen."},
                             "purpose": {"type": "string", "description": "Kort syfte, t.ex. 'Bygga aerob bas'"},
                             "exercises": {
                                 "type": "array",
