@@ -879,14 +879,19 @@ async def plan_status(request: Request):
         is_today = (i == 0)
 
         day_plans = [p for p in planned if p.get("date") == date_str]
-        if day_plans:
-            plan_title = " + ".join(p.get("title", "") for p in day_plans)
-            plan_details = day_plans[0].get("details", "")
-            plan_purpose = day_plans[0].get("purpose", "")
-        else:
-            plan_title = ""
-            plan_details = ""
-            plan_purpose = ""
+        # Build list of individual sessions for this day
+        sessions_list = []
+        for p in day_plans:
+            sessions_list.append({
+                "title": p.get("title", ""),
+                "details": p.get("details", ""),
+                "purpose": p.get("purpose", ""),
+                "sport": p.get("sport", ""),
+                "duration_min": p.get("duration_min"),
+            })
+        plan_title = " + ".join(s["title"] for s in sessions_list) if sessions_list else ""
+        plan_details = sessions_list[0]["details"] if sessions_list else ""
+        plan_purpose = sessions_list[0]["purpose"] if sessions_list else ""
 
         day_activities = [a for a in activities if a.get("date") == date_str]
         actual_summary = ""
@@ -911,6 +916,7 @@ async def plan_status(request: Request):
             "day": day_short,
             "date": date_str,
             "planned": plan_title,
+            "sessions": sessions_list,
             "details": plan_details,
             "purpose": plan_purpose,
             "actual": actual_summary,

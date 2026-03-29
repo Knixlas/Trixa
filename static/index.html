@@ -200,6 +200,7 @@ input:focus { border-color: var(--accent); }
 .dot-status-future { background: #333; }
 .week-info { min-width: 0; }
 .week-planned { color: var(--text); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-session { color: var(--text); font-size: 0.78rem; padding: 1px 0; border-left: 2px solid var(--accent); padding-left: 0.4rem; margin-bottom: 2px; }
 .week-actual { color: #2ecc71; font-size: 0.7rem; margin-top: 1px; }
 .week-actual.missed { color: #e74c3c; }
 
@@ -911,18 +912,21 @@ async function renderNextSession() {
       el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem;padding:0.3rem 0">Be Trixa om en veckoplan!</div>';
       return;
     }
-    // Find next non-rest session
+    // Find next day with non-rest sessions
     const LABELS = ['Idag','Imorgon'];
     for (let i = 0; i < cachedPlanStatus.days.length; i++) {
       const d = cachedPlanStatus.days[i];
-      if (!d.planned || d.planned.toLowerCase().includes('vila')) continue;
-      if (d.actual) continue; // Already done today
+      const sessions = (d.sessions || []).filter(s => s.sport?.toLowerCase() !== 'vila');
+      if (sessions.length === 0) continue;
+      if (d.actual) continue;
 
       const label = i < 2 ? LABELS[i] : d.day;
       let html = `<div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem">${label}</div>`;
-      html += `<div style="font-size:1rem;font-weight:700;margin-bottom:0.3rem">${esc(d.planned)}</div>`;
-      if (d.details) html += `<div style="font-size:0.8rem;color:var(--text-dim);line-height:1.5">${esc(d.details)}</div>`;
-      if (d.purpose) html += `<div style="font-size:0.75rem;color:var(--accent);margin-top:0.3rem;font-style:italic">${esc(d.purpose)}</div>`;
+      for (const s of sessions) {
+        html += `<div style="font-size:1rem;font-weight:700;margin-bottom:0.2rem">${esc(s.title)}</div>`;
+        if (s.details) html += `<div style="font-size:0.8rem;color:var(--text-dim);line-height:1.5;margin-bottom:0.3rem">${esc(s.details)}</div>`;
+        if (s.purpose) html += `<div style="font-size:0.75rem;color:var(--accent);margin-bottom:0.5rem;font-style:italic">${esc(s.purpose)}</div>`;
+      }
       el.innerHTML = html;
       return;
     }
@@ -1059,12 +1063,20 @@ async function renderWeekPlan() {
       const dotClass = 'dot-status-' + d.status;
       const todayClass = d.is_today ? ' is-today' : '';
       const label = i < 2 ? dayLabels[i] : d.day;
-      const planned = d.planned || '';
+      const sessions = d.sessions || [];
+      let plannedHtml = '';
+      if (sessions.length > 1) {
+        plannedHtml = sessions.map(s => `<div class="week-session">${esc(s.title)}</div>`).join('');
+      } else if (sessions.length === 1) {
+        plannedHtml = `<div class="week-planned">${esc(sessions[0].title)}</div>`;
+      } else {
+        plannedHtml = '<span style="color:var(--text-dim)">-</span>';
+      }
       html += `<div class="week-row${todayClass}">
         <div class="week-day">${esc(label)}</div>
         <div class="week-dot ${dotClass}"></div>
         <div class="week-info">
-          <div class="week-planned">${planned ? esc(planned) : '<span style="color:var(--text-dim)">-</span>'}</div>
+          ${plannedHtml}
           ${d.actual ? `<div class="week-actual">&#x2713; ${esc(d.actual)}</div>` : ''}
         </div>
       </div>`;
