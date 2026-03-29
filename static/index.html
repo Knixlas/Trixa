@@ -1748,9 +1748,22 @@ async function addHealthDataEntry() {
   valInput.value = '';
   const today = new Date().toISOString().slice(0, 10);
   try {
+    // Check if key exists — if so, append to existing value
+    const pr = await fetch('/api/profile', {headers: hdrs()});
+    const pd = await pr.json();
+    const hd = pd.profile?.health_data || {};
+    let newVal = val;
+    if (hd[key]) {
+      const existing = typeof hd[key] === 'object' ? (hd[key].value || '') : String(hd[key]);
+      if (existing && !existing.includes(val)) {
+        newVal = existing + ', ' + val;
+      } else if (existing) {
+        newVal = existing; // Already contains this value
+      }
+    }
     const r = await fetch('/api/profile/health-data', {
       method: 'POST', headers: hdrs(),
-      body: JSON.stringify({[key]: {value: val, noted_at: today}}),
+      body: JSON.stringify({[key]: {value: newVal, noted_at: today}}),
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
