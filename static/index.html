@@ -1717,6 +1717,16 @@ async function showApp() {
     const r = await fetch('/api/conversation', {headers: hdrs()});
     const d = await r.json();
     chatHistory = d.messages || [];
+    // Auto-reset conversation weekly so system prompt stays fresh
+    const lastReset = parseInt(localStorage.getItem('trixa_conv_reset') || '0');
+    const daysSinceReset = (Date.now() - lastReset) / 86400000;
+    if (chatHistory.length > 0 && daysSinceReset >= 7) {
+      console.log('[trixa] Weekly conversation reset');
+      try { await fetch('/api/conversation', {method:'DELETE', headers:hdrs()}); } catch {}
+      chatHistory = [];
+      localStorage.setItem('trixa_conv_reset', Date.now().toString());
+    }
+    if (lastReset === 0) localStorage.setItem('trixa_conv_reset', Date.now().toString());
   } catch { chatHistory = []; }
   await fetchStrava();
   renderHome(); renderProfile();
