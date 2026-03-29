@@ -178,7 +178,7 @@ def get_plan_tool() -> dict:
             "KRITISKT: Datum i sessions MASTE vara exakt YYYY-MM-DD och matcha "
             "EXAKT de dagar du namner i texten. Om du sager 'tisdag 25/3' MASTE date vara "
             f"'2026-03-25' (aret ar {datetime.now().year}). "
-            "Dubbelkolla att varje datum stammer med veckodagen. "
+            "RAKNA ALDRIG ut veckodagar sjalv — anvand ALLTID datumreferenstabellen i systemprompten. "
             "Du MASTE anropa detta verktyg varje gang en plan godkanns eller andras. "
             "Vid andring: skicka HELA den uppdaterade planen (alla dagar kommande 7-10 dagar), "
             "inte bara det andrade passet. Inkludera vilopass (sport='Vila', title='Vila'). "

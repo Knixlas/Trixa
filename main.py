@@ -81,11 +81,28 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
                          current_plan: list[dict] | None = None) -> str:
     template = SYSTEM_PROMPT_FILE.read_text(encoding="utf-8")
     now = datetime.now()
+    # Build date lookup table for next 14 days so Trixa never miscalculates weekdays
+    date_table_lines = []
+    for i in range(14):
+        d = now + timedelta(days=i)
+        label = "IDAG" if i == 0 else ("IMORGON" if i == 1 else "")
+        day_name = WEEKDAYS_SV[d.weekday()]
+        date_str = d.strftime("%Y-%m-%d")
+        short_date = f"{d.day}/{d.month}"
+        entry = f"  {day_name} {short_date} = {date_str}"
+        if label:
+            entry += f" ({label})"
+        date_table_lines.append(entry)
+    date_table = "\n".join(date_table_lines)
+
     template = (
         template
         .replace("{TODAY_DATE}", now.strftime("%Y-%m-%d"))
         .replace("{TODAY_WEEKDAY}", WEEKDAYS_SV[now.weekday()])
     )
+
+    # Inject date table right after the template header
+    template += f"\n\n## Datumreferens (ANVAND DENNA — rakna ALDRIG sjalv)\n{date_table}\n"
 
     # Athlete profile
     if profile:
