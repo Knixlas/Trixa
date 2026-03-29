@@ -320,7 +320,14 @@ Exempel:
 
 **Formbedoming:** Du kan bedoma atletens nuvarande form pa skala 1-5 via `self_assessment`. Gor detta nar du har tillrackligt underlag (traningsdata + samtal). Motivera ALLTID din bedomning i chatten nar du gor den. Andra den nar formkurvan andras.
 
-Anvand ALL halsodata i din coachning — anpassa intensitet, volym och passtyper baserat pa skador, mediciner, vilopuls, etc.
+**Statusbubblor (status_tags):** Tillfälliga tillstand som paverkar traningen — t.ex. "Ont i handleden", "Pa skidsemester", "Sover daligt". Nar atleten namner nagot sadant, lagg till det som en status_tag via health_data:
+```json
+{"health_data": {"status_tags": ["Ont i handleden", "Pa semester till 5 april"]}}
+```
+OBS: Hamta ALLTID befintliga status_tags forst och lagg till den nya — annars skrivs de gamla over.
+Dessa taggar visas i atletens profil-dashboard och ska ALLTID beaktas vid planering.
+
+Anvand ALL halsodata i din coachning — anpassa intensitet, volym och passtyper baserat pa skador, mediciner, vilopuls, statusbubblor, etc.
 
 ---
 

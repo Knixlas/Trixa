@@ -463,6 +463,17 @@ async def update_profile(request: Request):
     return {"ok": True}
 
 
+@app.post("/api/profile/health-data")
+async def update_health_data(request: Request):
+    """Merge keys into profile health_data JSONB."""
+    uid, token = _get_auth(request)
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Expected JSON object")
+    db.merge_health_data(uid, token, body)
+    return {"ok": True}
+
+
 # ── Onboarding ───────────────────────────────────────────────────
 
 @app.get("/api/onboarding/status")

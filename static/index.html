@@ -200,6 +200,9 @@ input:focus { border-color: var(--accent); }
 .dot-status-future { background: #333; }
 .week-info { min-width: 0; }
 .week-planned { color: var(--text); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-tag { display: inline-flex; align-items: center; gap: 0.3rem; background: var(--surface); border: 1px solid var(--accent); border-radius: 20px; padding: 0.3rem 0.7rem; font-size: 0.8rem; color: var(--text); }
+.status-tag .tag-x { cursor: pointer; opacity: 0.5; font-size: 0.7rem; padding: 2px; }
+.status-tag .tag-x:hover { opacity: 1; }
 .effort-cell { white-space: nowrap; }
 .effort-btn { background: none; border: 1px solid #333; border-radius: 6px; padding: 2px 5px; font-size: 0.75rem; cursor: pointer; margin: 0 1px; min-width: 28px; min-height: 28px; transition: all 0.15s; }
 .effort-btn.effort-active { border-color: var(--accent); transform: scale(1.15); box-shadow: 0 0 4px var(--accent); }
@@ -507,6 +510,19 @@ input:focus { border-color: var(--accent); }
 
     <!-- ═══ DETALJER ═══ -->
     <div id="profile-details" style="display:none">
+
+      <!-- Status-bubblor (tillfälliga tillstånd) -->
+      <div class="profile-section" id="status-tags-section">
+        <h3>Just nu</h3>
+        <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:0.5rem;line-height:1.4">
+          Berätta för Trixa t.ex. "jag har ont i handleden" eller "jag är på semester" — hon lägger till det här. Klicka ✕ för att ta bort.
+        </p>
+        <div id="status-tags" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.5rem"></div>
+        <div style="display:flex;gap:0.3rem">
+          <input type="text" id="new-tag-input" placeholder="Lägg till..." style="flex:1;font-size:0.8rem;padding:0.4rem 0.6rem">
+          <button class="btn btn-sm" onclick="addStatusTag()" style="padding:0.4rem 0.8rem;font-size:0.8rem">+</button>
+        </div>
+      </div>
 
       <div class="profile-section">
         <h3>Hälsa &amp; kropp</h3>
@@ -1571,6 +1587,56 @@ async function saveAthleteProfile() {
   } catch (e) { alert('Fel: ' + e.message); }
 }
 
+// ── Status Tags (temporary conditions) ──
+function renderStatusTags(profile) {
+  const hd = profile.health_data || {};
+  const tags = hd.status_tags || [];
+  const container = document.getElementById('status-tags');
+  if (!tags.length) {
+    container.innerHTML = '<span style="color:var(--text-dim);font-size:0.78rem">Inga aktiva tillstånd</span>';
+    return;
+  }
+  container.innerHTML = tags.map((t, i) =>
+    `<span class="status-tag">${esc(t)}<span class="tag-x" onclick="removeStatusTag(${i})">✕</span></span>`
+  ).join('');
+}
+
+async function addStatusTag() {
+  const input = document.getElementById('new-tag-input');
+  const tag = input.value.trim();
+  if (!tag) return;
+  input.value = '';
+  try {
+    // Fetch current tags, append, save back
+    const r = await fetch('/api/profile', {headers: hdrs()});
+    const d = await r.json();
+    const hd = d.profile?.health_data || {};
+    const tags = hd.status_tags || [];
+    tags.push(tag);
+    // Save via merge (using a small helper endpoint or direct profile update)
+    await fetch('/api/profile/health-data', {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({status_tags: tags}),
+    });
+    renderProfile();
+  } catch (e) { console.error(e); }
+}
+
+async function removeStatusTag(index) {
+  try {
+    const r = await fetch('/api/profile', {headers: hdrs()});
+    const d = await r.json();
+    const hd = d.profile?.health_data || {};
+    const tags = hd.status_tags || [];
+    tags.splice(index, 1);
+    await fetch('/api/profile/health-data', {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({status_tags: tags}),
+    });
+    renderProfile();
+  } catch (e) { console.error(e); }
+}
+
 async function logExerciseEffort(date, name, effort, btn) {
   // Toggle: if same effort clicked again, deselect
   const row = btn.closest('tr');
@@ -1646,6 +1712,8 @@ async function setSelfAssessment(val) {
 }
 
 function renderHealthData(profile) {
+  // Status tags
+  renderStatusTags(profile);
   // Fixed fields
   if (profile.gender) document.getElementById('p-gender').value = profile.gender;
   if (profile.height_cm) document.getElementById('p-height').value = profile.height_cm;
