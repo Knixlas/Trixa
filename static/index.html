@@ -916,16 +916,24 @@ async function renderGoals() {
 
 async function fetchCoachBrief(refresh = false) {
   const tip = document.getElementById('tip-container');
-  if (cachedBrief && !refresh) {
+  const domina = isDomina();
+  // Always refresh if domina mode changed, or every 30 min
+  const lastFetch = parseInt(sessionStorage.getItem('trixa_brief_ts') || '0');
+  const minutesSinceFetch = (Date.now() - lastFetch) / 60000;
+  const dominaChanged = (sessionStorage.getItem('trixa_brief_domina') || '0') !== (domina ? '1' : '0');
+  if (cachedBrief && !refresh && !dominaChanged && minutesSinceFetch < 30) {
     renderBrief(cachedBrief);
     return;
   }
-  tip.innerHTML = `<div class="tip-box"><div class="tip-label">Trixa tänker...</div><div class="tip-text" style="opacity:0.5">Analyserar din traning...</div></div>`;
+  const label = domina ? 'DominaTrixa tänker...' : 'Trixa tänker...';
+  tip.innerHTML = `<div class="tip-box"><div class="tip-label">${label}</div><div class="tip-text" style="opacity:0.5">Analyserar din träning...</div></div>`;
   try {
-    const url = '/api/coach/brief' + (refresh ? '?refresh=1' : '');
+    const url = '/api/coach/brief?refresh=1' + (domina ? '&domina=1' : '');
     const r = await fetch(url, {headers: hdrs()});
     if (r.ok) {
       cachedBrief = await r.json();
+      sessionStorage.setItem('trixa_brief_ts', Date.now().toString());
+      sessionStorage.setItem('trixa_brief_domina', domina ? '1' : '0');
       renderBrief(cachedBrief);
     }
   } catch {}
@@ -933,7 +941,10 @@ async function fetchCoachBrief(refresh = false) {
 
 function renderBrief(data) {
   const tip = document.getElementById('tip-container');
-  let html = `<div class="tip-box"><div class="tip-label">Trixa säger</div><div class="tip-text">${md(data.brief)}</div>`;
+  const domina = isDomina();
+  const label = domina ? 'DominaTrixa säger' : 'Trixa säger';
+  const boxStyle = domina ? 'background:linear-gradient(135deg, #6b21a8, #9333ea)' : '';
+  let html = `<div class="tip-box" style="${boxStyle}"><div class="tip-label">${label}</div><div class="tip-text">${md(data.brief)}</div>`;
   if (data.follow_up) {
     html += `<div style="margin-top:0.4rem;font-size:0.75rem;opacity:0.7">&#x1F4C5; Uppföljning: ${esc(data.follow_up)}</div>`;
   }
