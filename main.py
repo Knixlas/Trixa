@@ -1270,18 +1270,29 @@ async def coach_brief(request: Request, refresh: int = 0, domina: int = 0):
     except Exception:
         pass
 
-    yesterday_activity = ""
+    today_str = now.strftime("%Y-%m-%d")
     yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    today_activities = []
+    yesterday_activity = ""
     for a in (activities or []):
-        if a.get("date") == yesterday_str:
+        if a.get("date") == today_str:
             parts = [a.get("type", "")]
             if a.get("duration_min"): parts.append(f"{int(a['duration_min'])}min")
             if a.get("distance_km"): parts.append(f"{a['distance_km']}km")
             if a.get("pace"): parts.append(a["pace"])
             if a.get("avg_hr"): parts.append(f"puls {a['avg_hr']}")
-            if a.get("rating"): parts.append(f"betyg {a['rating']}/5")
+            if a.get("rating"): parts.append(f"njutningsbetyg {a['rating']}/5")
+            today_activities.append(", ".join(parts))
+        elif a.get("date") == yesterday_str and not yesterday_activity:
+            parts = [a.get("type", "")]
+            if a.get("duration_min"): parts.append(f"{int(a['duration_min'])}min")
+            if a.get("distance_km"): parts.append(f"{a['distance_km']}km")
+            if a.get("pace"): parts.append(a["pace"])
+            if a.get("avg_hr"): parts.append(f"puls {a['avg_hr']}")
+            if a.get("rating"): parts.append(f"njutningsbetyg {a['rating']}/5")
             yesterday_activity = ", ".join(parts)
-            break
+    today_done = " | ".join(today_activities) if today_activities else ""
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
@@ -1302,9 +1313,9 @@ Regler:
 - Max 3 meningar, direkt och {'sarkastisk' if domina else 'varm'}
 - STALL ALDRIG FRAGOR. Inga fragetecken. Bara pastaenden, analys, observationer och {'han' if domina else 'uppmaningar'}.
 - Anledning: atleten kan inte svara i denna ruta — den ar enbart for visning.
+- PRIORITET: Om atleten REDAN genomfort ett pass idag — kommentera det passet (data, prestation, analys). Namna INTE det planerade passet om det redan ar gjort.
+- Om inget genomfort idag: paminn om dagens planerade pass.
 - Referera till FAKTISK data (typ, puls, fart, distans)
-- Om gardasgens pass avvek fran planen — konstatera det
-- Papminn om dagens planerade pass om det finns ett
 - Om du ser monster (overtraning, for hart, bra trend) — namna det
 - Svara pa svenska, tilltala vid namn
 
@@ -1312,8 +1323,9 @@ Idag ar {weekday} {now.strftime('%Y-%m-%d')}."""
 
     user_msg = f"""Atlet: {name}
 
+Dagens GENOMFORDA pass: {today_done or 'Inget genomfort annu'}
+Dagens PLANERADE pass: {plan_today or 'Inget planerat'}
 Gardagens pass: {yesterday_activity or 'Vila / inget registrerat'}
-Dagens planerade pass: {plan_today or 'Inget planerat'}
 
 Senaste 14 dagars traning:
 {chr(10).join(act_lines) if act_lines else 'Ingen data'}
@@ -1321,7 +1333,7 @@ Senaste 14 dagars traning:
 Minnesanteckningar om atleten:
 {chr(10).join(mem_lines) if mem_lines else 'Inga anteckningar annu'}
 
-Skriv en kort proaktiv dashboardanalys."""
+VIKTIGT: Om det finns genomforda pass idag, kommentera DEM — inte planerade pass som redan ar klara."""
 
     try:
         response = api_client.messages.create(
