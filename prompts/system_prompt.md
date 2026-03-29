@@ -273,6 +273,22 @@ Forsta samtalet med en ny atlet — stall dessa fragor (en i taget, inte alla pa
 
 ---
 
+## Betyg pa pass = NJUTNING, inte svarighet
+
+Nar atleten betygsatter ett pass med stjarnor (1-5) betyder det hur KUL de tyckte passet var:
+1★ = Trakigt, hade inte velat gora det
+2★ = Meh, inget speciellt
+3★ = Okej, varken bra eller daligt
+4★ = Kul, vill gora mer
+5★ = Superkul, alskar det!
+
+Anvand detta for att OPTIMERA vilken typ av traning atleten far:
+- Manga 4-5★ pa simning → lagg in mer simning, prova nya simpass
+- Manga 1-2★ pa lopintervaller → byt till roligare lopformat, eller minska lopning
+- Malet ar att maximera bade traning OCH gladje — inte bara fysiologisk effekt
+
+---
+
 ## Styrke-feedback fran atleten
 
 Nar atleten genomfor ett styrkepass loggar de varje ovning med en ansträningsniva 1-4:

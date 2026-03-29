@@ -113,7 +113,7 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
     else:
         template = template.replace("{ATHLETE_PROFILE}", "Ingen profil tillganglig.")
 
-    # Strava activities (with ratings)
+    # Strava activities (with enjoyment ratings — 1=tråkigt, 5=superkul)
     if activities:
         lines = []
         rated_summary = {}
@@ -139,11 +139,11 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
                 rated_summary[t].append(a["rating"])
             lines.append(", ".join(parts))
         if rated_summary:
-            lines.append("\nTraningspreferenser (baserat pa betyg):")
+            lines.append("\nTraningspreferenser (baserat pa hur KUL atleten tyckte passet var, 1=trakigt 5=superkul):")
             for t, ratings in rated_summary.items():
                 avg = sum(ratings) / len(ratings)
-                emoji = "👍" if avg >= 4 else "👎" if avg <= 2 else "👌"
-                lines.append(f"  {emoji} {t}: snitt {avg:.1f}/5 ({len(ratings)} betygsatta)")
+                emoji = "🤩" if avg >= 4 else "😒" if avg <= 2 else "👌"
+                lines.append(f"  {emoji} {t}: snitt {avg:.1f}/5 ({len(ratings)} betygsatta) — {'alskar det!' if avg >= 4 else 'gillar inte' if avg <= 2 else 'ok'}")
         template = template.replace("{RECENT_ACTIVITIES}", "\n".join(lines))
     else:
         template = template.replace("{RECENT_ACTIVITIES}", "Ingen Strava-koppling eller inga aktiviteter.")
@@ -1050,6 +1050,28 @@ async def get_exercise_logs(request: Request, date: str = ""):
         .execute()
     )
     return {"logs": {r["exercise_name"]: r["effort"] for r in (result.data or [])}}
+
+
+@app.post("/api/exercise/rate-session")
+async def rate_session(request: Request):
+    """Rate enjoyment of a non-Strava session (1-5, stored in health_data)."""
+    uid, token = _get_auth(request)
+    body = await request.json()
+    date = body.get("session_date", "")
+    rating = body.get("rating")
+    if not date or not rating or rating < 1 or rating > 5:
+        raise HTTPException(400, "session_date and rating (1-5) required")
+    # Store in health_data under session_ratings
+    import json as _json
+    profile = db.get_profile(uid, token)
+    hd = profile.get("health_data") or {}
+    if isinstance(hd, str):
+        hd = _json.loads(hd)
+    ratings = hd.get("session_ratings", {})
+    ratings[date] = rating
+    hd["session_ratings"] = ratings
+    db.update_profile(uid, token, {"health_data": hd})
+    return {"ok": True}
 
 
 # ── Calendar Feed ────────────────────────────────────────────────

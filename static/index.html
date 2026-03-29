@@ -1069,6 +1069,13 @@ async function renderNextStrength() {
         html += `<tr class="${skipped ? 'ex-skipped' : ''}"><td>${esc(eName)}</td><td>${detail}${note}</td><td class="effort-cell">${checkBtn}${effortBtns}</td></tr>`;
       }
       html += '</tbody></table>';
+      // Session enjoyment rating
+      html += `<div style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-dim)">Hur kul var passet?
+        ${[1,2,3,4,5].map(n => {
+          const tips = ['Tråkigt','Meh','Okej','Kul','Superkul!'];
+          return `<span class="star" onclick="rateStrengthSession('${s.date}',${n},this)" title="${tips[n-1]}" style="cursor:pointer;font-size:1rem;color:#666">☆</span>`;
+        }).join('')}
+      </div>`;
     } else if (s.details) {
       // Split numbered exercises onto separate lines
       const formatted = esc(s.details).replace(/(\d+)\.\s/g, '<br>$1. ').replace(/^<br>/, '');
@@ -1456,7 +1463,10 @@ function renderStravaActivities() {
     const stars = a.rating
       ? `<div class="rating-display">${'★'.repeat(a.rating)}${'☆'.repeat(5-a.rating)}</div>`
       : `<div class="rating-input" data-strava-id="${a.strava_id}">
-          ${[1,2,3,4,5].map(n => `<span class="star" onclick="rateActivity(${a.strava_id},${n},this)" title="${n}">☆</span>`).join('')}
+          ${[1,2,3,4,5].map(n => {
+            const tips = ['Tråkigt','Meh','Okej','Kul','Superkul!'];
+            return `<span class="star" onclick="rateActivity(${a.strava_id},${n},this)" title="${tips[n-1]}">\u2606</span>`;
+          }).join('')}
         </div>`;
     html += `<div class="activity-item">
       <div class="activity-icon">${icon}</div>
@@ -1682,6 +1692,18 @@ async function removeStatusTag(index) {
     });
     renderProfile();
   } catch (e) { console.error(e); }
+}
+
+async function rateStrengthSession(date, rating, el) {
+  const container = el.parentElement;
+  container.innerHTML = 'Hur kul var passet? ' + '★'.repeat(rating) + '☆'.repeat(5 - rating);
+  container.style.color = '#f5a623';
+  try {
+    await fetch('/api/exercise/rate-session', {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({session_date: date, rating}),
+    });
+  } catch {}
 }
 
 async function toggleExerciseDone(date, name, btn) {
