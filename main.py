@@ -478,6 +478,38 @@ async def update_health_data(request: Request):
     return {"ok": True}
 
 
+@app.post("/api/profile/health-log")
+async def append_health_log(request: Request):
+    """Append timestamped values to health_data log arrays."""
+    uid, token = _get_auth(request)
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Expected JSON object")
+    import json as _json
+    profile = db.get_profile(uid, token)
+    hd = profile.get("health_data") or {}
+    if isinstance(hd, str):
+        hd = _json.loads(hd)
+    for key, entry in body.items():
+        if not isinstance(entry, dict) or "value" not in entry:
+            continue
+        if key not in hd:
+            hd[key] = []
+        if not isinstance(hd[key], list):
+            hd[key] = [hd[key]]  # migrate old scalar to array
+        # Don't duplicate same date
+        if not any(e.get("date") == entry.get("date") for e in hd[key] if isinstance(e, dict)):
+            hd[key].append(entry)
+        else:
+            # Update existing entry for today
+            for i, e in enumerate(hd[key]):
+                if isinstance(e, dict) and e.get("date") == entry.get("date"):
+                    hd[key][i] = entry
+                    break
+    db.update_profile(uid, token, {"health_data": hd})
+    return {"ok": True}
+
+
 # ── Onboarding ───────────────────────────────────────────────────
 
 @app.get("/api/onboarding/status")

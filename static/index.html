@@ -573,7 +573,7 @@ input:focus { border-color: var(--accent); }
         </div>
         <div class="profile-input"><label>Mediciner</label><input type="text" id="p-meds" placeholder="T.ex. Levaxin, Metformin"></div>
         <div class="profile-input"><label>Skador / begränsningar</label><input type="text" id="p-injuries" placeholder="T.ex. ont i vänster knä sedan mars"></div>
-        <div class="profile-input"><label>Hälsoanteckningar</label><input type="text" id="p-health" placeholder="Övrigt"></div>
+        <div class="profile-input"><label>Hälsoanteckningar</label><textarea id="p-health" placeholder="Övrigt" rows="3" style="width:100%;resize:vertical;font-size:0.9rem;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-family:inherit"></textarea></div>
         <button class="btn btn-sm" onclick="saveHealthProfile();saveAthleteProfile()" style="margin-top:0.5rem">Spara</button>
 
         <!-- Trixa vet också -->
@@ -1801,7 +1801,22 @@ async function saveHealthProfile() {
   if (injuries) data.injuries = injuries;
   try {
     const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
-    alert(r.ok ? 'Hälsodata sparad!' : 'Kunde inte spara');
+    if (!r.ok) { alert('Kunde inte spara'); return; }
+    // Log trackable values with timestamp in health_data
+    const today = new Date().toISOString().slice(0, 10);
+    const logData = {};
+    if (bp) logData.blodtryck_log = {value: bp, date: today};
+    if (resting) logData.vilopuls_log = {value: parseInt(resting), date: today};
+    if (height) logData.langd_log = {value: parseInt(height), date: today};
+    if (meds) logData.mediciner_log = {value: meds, date: today};
+    if (Object.keys(logData).length > 0) {
+      // Merge as append-to-array via backend
+      await fetch('/api/profile/health-log', {
+        method: 'POST', headers: hdrs(),
+        body: JSON.stringify(logData),
+      });
+    }
+    alert('Hälsodata sparad!');
   } catch (e) { alert('Fel: ' + e.message); }
 }
 
@@ -1843,13 +1858,23 @@ function renderHealthData(profile) {
   // Dynamic health_data (read-only list)
   const container = document.getElementById('health-data-list');
   const wrapper = document.getElementById('trixa-health-data');
-  const entries = Object.entries(hd).filter(([k]) => k !== 'trixa_assessment');
+  const INTERNAL_KEYS = new Set(['trixa_assessment', 'status_tags', 'session_ratings']);
+  const entries = Object.entries(hd).filter(([k]) => !INTERNAL_KEYS.has(k));
   if (entries.length > 0) {
     wrapper.style.display = 'block';
     container.innerHTML = entries.map(([k, v]) => {
-      const val = typeof v === 'object' ? (v.value || JSON.stringify(v)) : v;
-      const date = (typeof v === 'object' && v.noted_at) ? ` <span style="opacity:0.5">(${v.noted_at})</span>` : '';
-      return `<div class="health-data-item"><span class="hd-key">${esc(k.replace(/_/g, ' '))}</span><span>${esc(String(val))}${date}</span></div>`;
+      let val, dateStr = '';
+      if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+        val = v.value || JSON.stringify(v);
+        if (v.noted_at) dateStr = ` <span style="opacity:0.5">(${v.noted_at})</span>`;
+      } else if (Array.isArray(v)) {
+        // Show array as readable list (e.g. history)
+        val = v.map(item => typeof item === 'object' ? `${item.value} (${item.date || ''})` : item).join(', ');
+      } else {
+        val = String(v);
+      }
+      const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      return `<div class="health-data-item"><span class="hd-key">${esc(label)}</span><span>${esc(String(val))}${dateStr}</span></div>`;
     }).join('');
   } else {
     wrapper.style.display = 'none';
