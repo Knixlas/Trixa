@@ -387,10 +387,9 @@ async def onboarding_status(request: Request):
             "level": None,
             "missing": ["experience_level", "goals", "weekly_hours"],
             "message": (
-                "Hej! Jag ar Trixa — din personliga tranare. "
-                "For att kunna coacha dig pa basta satt behover jag lara kanna dig lite. "
-                "Berata: vad tranar du for, och hur ser din traning ut idag? "
-                "Ar du nybörjare, motionar du regelbudet, eller ar du en mer erfaren atlet?"
+                "Hej och välkommen! 👋 Jag är Trixa — din personliga AI-tränare. "
+                "Kul att du är här! Berätta lite om dig — "
+                "vad är det som gör att du vill träna, och hur ser din träning ut idag?"
             ),
         }
 
@@ -431,47 +430,28 @@ async def onboarding_status(request: Request):
 
     if not level:
         message = (
-            f"{greeting}Vi har inte hunnit gå igenom grunderna än. "
-            "Berätta lite om dig — vad tränar du för och ungefär hur mycket tid har du per vecka?"
+            f"{greeting}Vad kul att du är här! 😊 "
+            "Berätta lite om dig — tränar du idag, eller funderar du på att komma igång? "
+            "Det finns inget rätt eller fel svar, jag anpassar mig helt efter dig."
         )
     elif level == "beginner":
-        parts = []
-        if not has_goals:
-            parts.append("vad du vill uppnå med träningen")
-        if not has_hours:
-            parts.append("hur många timmar per vecka du har tillgängliga")
         message = (
-            f"{greeting}Jag saknar lite info för att kunna planera din träning optimalt. "
-            f"Kan du berätta om {' och '.join(parts)}?"
+            f"{greeting}Kul att ha dig här! "
+            "Hur ser din vardag ut träningsmässigt just nu? "
+            "Jag vill förstå var du är idag så jag kan hjälpa dig framåt — steg för steg."
         )
     elif level == "intermediate":
-        parts = []
-        if not has_goals:
-            parts.append("dina mål den här säsongen")
-        if not has_hours:
-            parts.append("tillgängliga träningstimmar per vecka")
-        if not has_hr_zone:
-            parts.append("din tröskelpuls — vet du den?")
         message = (
-            f"{greeting}Lite grundinfo saknas fortfarande. "
-            f"Snabbaste vägen framåt: {', '.join(parts)}."
+            f"{greeting}Kul att ses igen! "
+            "Hur går träningen just nu — har du något mål du siktar mot, "
+            "eller vill du bara komma in i bra rutiner?"
         )
     else:  # advanced
-        parts = []
-        if not has_goals:
-            parts.append("din säsongsplan och huvudtävling")
-        if not has_power:
-            parts.append("FTP (har du wattmätare?)")
-        if not has_hr_zone:
-            parts.append("tröskelpuls")
-        if not has_swim:
-            parts.append("CSS (kritisk simhastighet per 100m)")
-        if not has_hours:
-            parts.append("veckovolym i timmar")
         message = (
-            f"{greeting}För att coacha dig på avancerad nivå behöver jag dina nyckeltal. "
-            f"Vad är din nuvarande {', '.join(parts[:3])}?"
-            + (f" (och {', '.join(parts[3:])})" if len(parts) > 3 else "")
+            f"{greeting}Kul att ha dig ombord! "
+            "Berätta lite om din bakgrund — vad har du tävlat i, "
+            "och vad siktar du på den här säsongen? "
+            "Så bygger vi upp din profil tillsammans."
         )
 
     return {
