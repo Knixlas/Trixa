@@ -84,6 +84,27 @@ UPDATE_PROFILE_TOOL = {
             "health_notes": {"type": "string", "description": "Skador, mediciner, begransningar"},
             "goal": {"type": "string", "description": "Overgrippande mal"},
             "strength_program": {"type": "string", "description": "Atletens nuvarande styrkeprogram — kompakt text med ovningar, set, reps och vikt. T.ex. 'Knaboj 3x8 60kg, Marklyft 3x6 80kg, Rodd 3x10 50kg'. Uppdatera efter varje styrkepass."},
+            "gender": {"type": "string", "enum": ["man", "kvinna", "annat", "vill ej ange"], "description": "Kon"},
+            "height_cm": {"type": "integer", "description": "Langd i cm"},
+            "resting_hr": {"type": "integer", "description": "Vilopuls i bpm"},
+            "blood_pressure": {"type": "string", "description": "Blodtryck, t.ex. '120/80'"},
+            "medications": {"type": "string", "description": "Mediciner atleten tar, t.ex. 'Levaxin 50mcg'"},
+            "injuries": {"type": "string", "description": "Aktuella skador eller begransningar, t.ex. 'Ont i vanster kna sedan mars'"},
+            "self_assessment": {
+                "type": "integer",
+                "description": "Trixas bedomning av atletens nuvarande form, 1-5. 1=mycket dalig form, 2=under medel, 3=normal, 4=bra form, 5=toppform. Gor denna bedomning nar du har tillrackligt underlag (traningsdata + samtal). Motivera alltid i chatten.",
+            },
+            "health_data": {
+                "type": "object",
+                "description": (
+                    "Dynamisk halsodata som Trixa observerar i samtalet. "
+                    "Skicka BARA nya/andrade nycklar — de MERGAS med befintlig data (inga befintliga nycklar forsvinner). "
+                    "Varje varde ska vara en dict med 'value' (det faktiska vardet) och 'noted_at' (datum YYYY-MM-DD). "
+                    "Exempel pa nycklar: 'vo2max', 'laktatvarden', 'somnvanor', 'stressniva', 'kost', "
+                    "'menscykel', 'operationer', 'allergier', 'kosttillskott', 'alkoholvanor'. "
+                    "Exempel: {\"vo2max\": {\"value\": \"52 ml/kg/min\", \"noted_at\": \"2026-03-29\"}}"
+                ),
+            },
         },
     },
 }

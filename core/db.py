@@ -129,7 +129,25 @@ def profile_to_dict(profile: dict) -> dict:
         if profile.get(k): d[k] = profile[k]
     # Strength
     if profile.get("strength_program"): d["strength_program"] = profile["strength_program"]
+    # Health & body
+    for k in ("gender", "height_cm", "resting_hr", "blood_pressure",
+              "medications", "injuries"):
+        if profile.get(k): d[k] = profile[k]
+    if profile.get("self_assessment"): d["self_assessment"] = profile["self_assessment"]
+    if profile.get("health_data"): d["health_data"] = profile["health_data"]
     return d
+
+
+def merge_health_data(user_id: str, access_token: str, new_data: dict) -> dict:
+    """Additively merge new keys into health_data JSONB column."""
+    import json as _json
+    profile = get_profile(user_id, access_token)
+    existing = profile.get("health_data") or {}
+    if isinstance(existing, str):
+        existing = _json.loads(existing)
+    existing.update(new_data)
+    update_profile(user_id, access_token, {"health_data": existing})
+    return existing
 
 
 # ── Conversations ────────────────────────────────────────────────

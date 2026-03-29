@@ -15,6 +15,9 @@ PROFILE_ALLOWED_FIELDS = {
     "experience_level", "age", "weight_kg", "years_training",
     "ironman_finishes", "weekly_hours", "next_race_name",
     "health_notes", "goal", "strength_program",
+    # Health & body
+    "gender", "height_cm", "resting_hr", "blood_pressure",
+    "medications", "injuries", "self_assessment",
 }
 
 
@@ -70,9 +73,24 @@ def process_tool_block(block, uid: str, token: str, result: ToolResult) -> str:
         try:
             fields = {k: v for k, v in block.input.items()
                       if k in PROFILE_ALLOWED_FIELDS and v is not None}
+            # Store self_assessment timestamp
+            if "self_assessment" in fields:
+                fields["self_assessment_at"] = datetime.now().isoformat()
+                # Also write Trixa's assessment into health_data with timestamp
+                db.merge_health_data(uid, token, {
+                    "trixa_assessment": {
+                        "value": fields["self_assessment"],
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                })
             if fields:
                 db.update_profile(uid, token, fields)
                 print(f"[profile] Updated: {list(fields.keys())}")
+            # Handle health_data JSONB merge separately
+            hd = block.input.get("health_data")
+            if hd and isinstance(hd, dict):
+                db.merge_health_data(uid, token, hd)
+                print(f"[profile] Merged health_data keys: {list(hd.keys())}")
             return "Profil uppdaterad"
         except Exception as e:
             print(f"Profile update error: {e}")

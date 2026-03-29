@@ -282,7 +282,12 @@ input:focus { border-color: var(--accent); }
 .profile-row .label { color: var(--text-dim); }
 .profile-input { margin-bottom: 0.6rem; }
 .profile-input label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.3rem; }
-.profile-input input { font-size: 0.9rem; padding: 0.6rem 0.8rem; }
+.profile-input input, .profile-input select { font-size: 0.9rem; padding: 0.6rem 0.8rem; }
+.smiley-btn { background: var(--surface); border: 2px solid transparent; border-radius: 10px; padding: 0.3rem 0.5rem; cursor: pointer; transition: border-color 0.2s, transform 0.1s; min-width: 44px; min-height: 44px; font-size: 1.4rem; }
+.smiley-btn.active { border-color: var(--accent); transform: scale(1.15); }
+.smiley-btn:hover { border-color: var(--accent); }
+.health-data-item { display: flex; justify-content: space-between; padding: 0.3rem 0; font-size: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.health-data-item .hd-key { color: var(--text-dim); text-transform: capitalize; }
 
 /* ── Desktop ── */
 @media (min-width: 769px) {
@@ -448,6 +453,54 @@ input:focus { border-color: var(--accent); }
       <div class="profile-input"><label>Nästa tävling</label><input type="text" id="p-race" placeholder="Ironman Kalmar, 15 aug 2026"></div>
       <div class="profile-input"><label>Hälsoanteckningar</label><input type="text" id="p-health" placeholder="T.ex. ont i handleden, Levaxin"></div>
       <button class="btn btn-sm" onclick="saveAthleteProfile()" style="margin-top:0.5rem">Spara profil</button>
+    </div>
+
+    <div class="profile-section" id="health-body-section">
+      <h3>Hälsa &amp; kropp</h3>
+      <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:0.8rem;line-height:1.4">
+        Har du fler data? Berätta för Trixa i chatten så lägger hon till dem i listan nedan.
+      </p>
+
+      <!-- Self-assessment smileys -->
+      <div style="margin-bottom:1rem">
+        <label style="display:block;font-size:0.8rem;color:var(--text-dim);margin-bottom:0.4rem">Hur känner du dig just nu?</label>
+        <div style="display:flex;gap:0.4rem;align-items:center">
+          <div id="self-assessment" style="display:flex;gap:0.3rem">
+            <button class="smiley-btn" data-val="1" onclick="setSelfAssessment(1)">&#128555;</button>
+            <button class="smiley-btn" data-val="2" onclick="setSelfAssessment(2)">&#128543;</button>
+            <button class="smiley-btn" data-val="3" onclick="setSelfAssessment(3)">&#128528;</button>
+            <button class="smiley-btn" data-val="4" onclick="setSelfAssessment(4)">&#128578;</button>
+            <button class="smiley-btn" data-val="5" onclick="setSelfAssessment(5)">&#128516;</button>
+          </div>
+        </div>
+        <div id="trixa-assessment" style="font-size:0.78rem;color:var(--text-dim);margin-top:0.3rem"></div>
+      </div>
+
+      <!-- Fixed health fields -->
+      <div class="profile-input">
+        <label>Kön</label>
+        <select id="p-gender" style="width:100%;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-size:0.9rem">
+          <option value="">Välj...</option>
+          <option value="man">Man</option>
+          <option value="kvinna">Kvinna</option>
+          <option value="annat">Annat</option>
+          <option value="vill ej ange">Vill ej ange</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+        <div class="profile-input"><label>Längd (cm)</label><input type="number" id="p-height" placeholder="178"></div>
+        <div class="profile-input"><label>Vilopuls</label><input type="number" id="p-resting" placeholder="52"></div>
+        <div class="profile-input"><label>Blodtryck</label><input type="text" id="p-bp" placeholder="120/80"></div>
+      </div>
+      <div class="profile-input"><label>Mediciner</label><input type="text" id="p-meds" placeholder="T.ex. Levaxin, Metformin"></div>
+      <div class="profile-input"><label>Skador / begränsningar</label><input type="text" id="p-injuries" placeholder="T.ex. ont i vänster knä sedan mars"></div>
+      <button class="btn btn-sm" onclick="saveHealthProfile()" style="margin-top:0.5rem">Spara hälsodata</button>
+
+      <!-- Trixa vet också (read-only dynamic data) -->
+      <div id="trixa-health-data" style="margin-top:1rem;display:none">
+        <h4 style="font-size:0.85rem;opacity:0.7;margin-bottom:0.5rem">Trixa vet också:</h4>
+        <div id="health-data-list"></div>
+      </div>
     </div>
 
     <div class="profile-section" id="strava-section">
@@ -1384,6 +1437,8 @@ async function renderProfile() {
       document.getElementById('p-hours').value = d.profile.weekly_hours || '';
       document.getElementById('p-race').value = d.profile.next_race_name || '';
       document.getElementById('p-health').value = d.profile.health_notes || '';
+      // Health & body
+      renderHealthData(d.profile);
     }
   } catch {}
   renderStravaProfile();
@@ -1411,6 +1466,73 @@ async function saveAthleteProfile() {
     const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
     alert(r.ok ? 'Profil sparad!' : 'Kunde inte spara');
   } catch (e) { alert('Fel: ' + e.message); }
+}
+
+async function saveHealthProfile() {
+  const data = {};
+  const gender = document.getElementById('p-gender').value;
+  const height = document.getElementById('p-height').value;
+  const resting = document.getElementById('p-resting').value;
+  const bp = document.getElementById('p-bp').value;
+  const meds = document.getElementById('p-meds').value;
+  const injuries = document.getElementById('p-injuries').value;
+  if (gender) data.gender = gender;
+  if (height) data.height_cm = parseInt(height);
+  if (resting) data.resting_hr = parseInt(resting);
+  if (bp) data.blood_pressure = bp;
+  if (meds) data.medications = meds;
+  if (injuries) data.injuries = injuries;
+  try {
+    const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
+    alert(r.ok ? 'Hälsodata sparad!' : 'Kunde inte spara');
+  } catch (e) { alert('Fel: ' + e.message); }
+}
+
+async function setSelfAssessment(val) {
+  document.querySelectorAll('.smiley-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.val) === val));
+  try {
+    await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify({self_assessment: val})});
+  } catch {}
+}
+
+function renderHealthData(profile) {
+  // Fixed fields
+  if (profile.gender) document.getElementById('p-gender').value = profile.gender;
+  if (profile.height_cm) document.getElementById('p-height').value = profile.height_cm;
+  if (profile.resting_hr) document.getElementById('p-resting').value = profile.resting_hr;
+  if (profile.blood_pressure) document.getElementById('p-bp').value = profile.blood_pressure;
+  if (profile.medications) document.getElementById('p-meds').value = profile.medications;
+  if (profile.injuries) document.getElementById('p-injuries').value = profile.injuries;
+
+  // Self-assessment smileys
+  if (profile.self_assessment) {
+    document.querySelectorAll('.smiley-btn').forEach(b =>
+      b.classList.toggle('active', parseInt(b.dataset.val) === profile.self_assessment));
+  }
+
+  // Trixa's assessment
+  const hd = profile.health_data || {};
+  const ta = hd.trixa_assessment;
+  const taDiv = document.getElementById('trixa-assessment');
+  if (ta) {
+    const smileys = ['', '\u{1F62B}', '\u{1F61F}', '\u{1F610}', '\u{1F642}', '\u{1F604}'];
+    taDiv.textContent = `Trixas bedömning: ${smileys[ta.value] || '?'} (${ta.timestamp ? new Date(ta.timestamp).toLocaleDateString('sv') : ''})`;
+  }
+
+  // Dynamic health_data (read-only list)
+  const container = document.getElementById('health-data-list');
+  const wrapper = document.getElementById('trixa-health-data');
+  const entries = Object.entries(hd).filter(([k]) => k !== 'trixa_assessment');
+  if (entries.length > 0) {
+    wrapper.style.display = 'block';
+    container.innerHTML = entries.map(([k, v]) => {
+      const val = typeof v === 'object' ? (v.value || JSON.stringify(v)) : v;
+      const date = (typeof v === 'object' && v.noted_at) ? ` <span style="opacity:0.5">(${v.noted_at})</span>` : '';
+      return `<div class="health-data-item"><span class="hd-key">${esc(k.replace(/_/g, ' '))}</span><span>${esc(String(val))}${date}</span></div>`;
+    }).join('');
+  } else {
+    wrapper.style.display = 'none';
+  }
 }
 
 async function saveZones() {

@@ -212,6 +212,33 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
             template += "Denna plan ar SATT och godkand av atleten. Andra den INTE utan att fraga.\n"
             template += "\n".join(plan_lines)
 
+    # Inject health data and self-assessment
+    if profile:
+        import json as _json
+        hd = profile.get("health_data") or {}
+        if isinstance(hd, str):
+            hd = _json.loads(hd)
+        if hd:
+            hd_lines = []
+            trixa_a = hd.get("trixa_assessment")
+            for key, val in hd.items():
+                if key == "trixa_assessment":
+                    continue
+                if isinstance(val, dict):
+                    hd_lines.append(f"- {key}: {val.get('value', val)} (noterat {val.get('noted_at', '?')})")
+                else:
+                    hd_lines.append(f"- {key}: {val}")
+            if hd_lines:
+                template += "\n\n## Extra halsodata (Trixa har noterat)\n" + "\n".join(hd_lines)
+            # Self-assessments
+            user_a = profile.get("self_assessment")
+            if trixa_a or user_a:
+                template += "\n\n## Formbedoming\n"
+                if user_a:
+                    template += f"- Atletens egen bedomning: {user_a}/5\n"
+                if trixa_a:
+                    template += f"- Trixas bedomning: {trixa_a.get('value', '?')}/5 ({trixa_a.get('timestamp', '')})\n"
+
     # Inject coach memory (relational observations)
     if coach_memories:
         mem_lines = []
@@ -410,6 +437,8 @@ async def update_profile(request: Request):
         "experience_level", "age", "weight_kg", "years_training",
         "ironman_finishes", "weekly_hours", "next_race_name",
         "next_race_date", "health_notes", "goal", "notes",
+        "gender", "height_cm", "resting_hr", "blood_pressure",
+        "medications", "injuries", "self_assessment",
     }
     fields = {k: v for k, v in body.items() if k in allowed and v is not None}
     if fields:
