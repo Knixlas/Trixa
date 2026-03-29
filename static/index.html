@@ -1928,72 +1928,83 @@ function renderHealthData(profile) {
   }
 
   // All health data in one unified list
-  // Merge legacy profile fields + zones into health_data view
+  // Build categorized health data display
   const container = document.getElementById('health-data-list');
-  const INTERNAL_KEYS = new Set(['trixa_assessment', 'status_tags', 'session_ratings', 'races']);
-  const legacy = {};
-  // Trackable metrics (pinned)
-  if (profile.weight_kg) legacy.vikt = {value: profile.weight_kg + ' kg', noted_at: '', pinned: true};
-  if (profile.gender) legacy.kön = {value: profile.gender, noted_at: '', pinned: true};
-  if (profile.height_cm) legacy.längd = {value: profile.height_cm + ' cm', noted_at: '', pinned: true};
-  if (profile.resting_hr) legacy.vilopuls = {value: profile.resting_hr + ' bpm', noted_at: '', pinned: true};
-  // Zones (pinned)
-  if (profile.ftp) legacy.ftp = {value: profile.ftp + ' watt', noted_at: '', pinned: true};
-  if (profile.css_per_100m) legacy.css = {value: profile.css_per_100m + ' /100m', noted_at: '', pinned: true};
-  if (profile.threshold_pace) legacy.tröskelfart = {value: profile.threshold_pace + ' /km', noted_at: '', pinned: true};
-  if (profile.threshold_hr) legacy.tröskelpuls = {value: profile.threshold_hr + ' bpm', noted_at: '', pinned: true};
-  if (profile.max_hr) legacy.maxpuls = {value: profile.max_hr + ' bpm', noted_at: '', pinned: true};
-  // Health info
-  if (profile.blood_pressure) legacy.blodtryck = {value: profile.blood_pressure, noted_at: ''};
-  if (profile.medications) legacy.mediciner = {value: profile.medications, noted_at: ''};
-  if (profile.injuries) legacy.skador = {value: profile.injuries, noted_at: ''};
-  if (profile.health_notes) legacy.hälsoanteckningar = {value: profile.health_notes, noted_at: ''};
-  // health_data entries override legacy if same key exists
-  const merged = {...legacy, ...hd};
-  const entries = Object.entries(merged).filter(([k]) => !INTERNAL_KEYS.has(k));
+  const INTERNAL_KEYS = new Set(['trixa_assessment', 'status_tags', 'session_ratings', 'races',
+    'vilopuls_log', 'blodtryck_log', 'langd_log', 'mediciner_log', 'medicin_log']);
 
-  // Sort: pinned (trackable) first, then regular
-  const pinned = entries.filter(([k, v]) => typeof v === 'object' && v !== null && v.pinned);
-  const regular = entries.filter(([k, v]) => !(typeof v === 'object' && v !== null && v.pinned));
+  // Define categories with their entries
+  const basdata = [];
+  const prestation = [];
+  const halsa = [];
 
-  if (entries.length > 0) {
-    let html = '';
-    for (const [k, v] of [...pinned, ...regular]) {
-      let val, dateStr = '';
-      const isPinned = typeof v === 'object' && v !== null && v.pinned;
-      const isLog = Array.isArray(v);
+  // Legacy profile fields → categories
+  if (profile.gender) basdata.push({key: '_gender', label: 'Kön', val: profile.gender});
+  if (profile.height_cm) basdata.push({key: '_height_cm', label: 'Längd', val: profile.height_cm + ' cm'});
+  if (profile.weight_kg) basdata.push({key: '_weight_kg', label: 'Vikt', val: profile.weight_kg + ' kg'});
+  if (profile.years_training) basdata.push({key: '_years', label: 'År med träning', val: profile.years_training});
+  if (profile.ironman_finishes) basdata.push({key: '_im', label: 'Ironman-starter', val: profile.ironman_finishes});
 
-      if (isLog) {
-        const latest = v[v.length - 1];
-        val = typeof latest === 'object' ? latest.value : latest;
-        dateStr = v.length > 1 ? ` <span style="opacity:0.4">(${v.length} mätningar)</span>` : '';
-        if (typeof latest === 'object' && latest.date) dateStr = ` <span style="opacity:0.4">${latest.date}</span>` + dateStr;
-      } else if (typeof v === 'object' && v !== null) {
-        val = v.value || JSON.stringify(v);
-        if (v.noted_at) dateStr = ` <span style="opacity:0.4">${v.noted_at}</span>`;
-      } else {
-        val = String(v);
-      }
+  if (profile.ftp) prestation.push({key: '_ftp', label: 'FTP', val: profile.ftp + ' watt'});
+  if (profile.css_per_100m) prestation.push({key: '_css', label: 'CSS', val: profile.css_per_100m + ' /100m'});
+  if (profile.threshold_pace) prestation.push({key: '_pace', label: 'Tröskelfart', val: profile.threshold_pace + ' /km'});
+  if (profile.threshold_hr) prestation.push({key: '_thr', label: 'Tröskelpuls', val: profile.threshold_hr + ' bpm'});
+  if (profile.max_hr) prestation.push({key: '_max', label: 'Maxpuls', val: profile.max_hr + ' bpm'});
 
-      const label = k.replace(/_\d+$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      const pinBtn = isPinned
-        ? `<span class="hd-pin pinned" onclick="togglePinHealthData('${k}')" title="Avpinna">📌</span>`
-        : `<span class="hd-pin" onclick="togglePinHealthData('${k}')" title="Pinna som mätvärde">📌</span>`;
-      const editBtn = isPinned
-        ? `<span class="hd-edit" onclick="editHealthDataInline('${k}',this)" title="Ändra">✏️</span>`
-        : '';
-      const delBtn = `<span class="tag-x" onclick="removeHealthDataEntry('${k}')" title="Ta bort">✕</span>`;
+  if (profile.resting_hr) halsa.push({key: '_resting', label: 'Vilopuls', val: profile.resting_hr + ' bpm'});
+  if (profile.blood_pressure) halsa.push({key: '_bp', label: 'Blodtryck', val: profile.blood_pressure});
+  if (profile.medications) halsa.push({key: '_meds', label: 'Mediciner', val: profile.medications});
+  if (profile.injuries) halsa.push({key: '_injuries', label: 'Skador', val: profile.injuries});
 
-      html += `<div class="health-data-item${isPinned ? ' hd-pinned' : ''}">
-        <span class="hd-key">${esc(label)}</span>
-        <span class="hd-val">${esc(String(val))}${dateStr}</span>
-        <span class="hd-actions">${editBtn}${pinBtn}${delBtn}</span>
+  // health_data entries → categorize by known keys or default to hälsa
+  const PRESTATION_KEYS = new Set(['ftp', 'css', 'tröskelfart', 'tröskelpuls', 'maxpuls', 'vo2max', 'laktat']);
+  const BASDATA_KEYS = new Set(['kön', 'längd', 'vikt', 'ålder']);
+  for (const [k, v] of Object.entries(hd)) {
+    if (INTERNAL_KEYS.has(k)) continue;
+    let val, dateStr = '';
+    if (Array.isArray(v)) {
+      const latest = v[v.length - 1];
+      val = typeof latest === 'object' ? latest.value : latest;
+      dateStr = typeof latest === 'object' && latest.date ? ` (${latest.date})` : '';
+      if (v.length > 1) dateStr += ` · ${v.length} mätningar`;
+    } else if (typeof v === 'object' && v !== null) {
+      val = v.value || JSON.stringify(v);
+      if (v.noted_at) dateStr = ` (${v.noted_at})`;
+    } else {
+      val = String(v);
+    }
+    const label = k.replace(/_\d+$/, '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+    const baseKey = k.replace(/_\d+$/, '').toLowerCase();
+    const entry = {key: k, label, val: String(val), dateStr, fromHD: true};
+    if (PRESTATION_KEYS.has(baseKey)) prestation.push(entry);
+    else if (BASDATA_KEYS.has(baseKey)) basdata.push(entry);
+    else halsa.push(entry);
+  }
+
+  // Hälsoanteckningar (special — shown as block text)
+  const healthNotes = profile.health_notes || '';
+
+  // Render
+  function renderCategory(title, items) {
+    if (!items.length && !healthNotes && title !== 'Hälsa') return '';
+    let html = `<div style="font-size:0.7rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0.7rem 0 0.3rem;padding-top:0.3rem;border-top:1px solid rgba(255,255,255,0.06)">${title}</div>`;
+    for (const item of items) {
+      const del = item.fromHD ? `<span class="tag-x" onclick="removeHealthDataEntry('${item.key}')" title="Ta bort">✕</span>` : '';
+      const date = item.dateStr || '';
+      html += `<div class="health-data-item">
+        <span class="hd-key">${esc(item.label)}</span>
+        <span class="hd-val">${esc(item.val)}${date ? ` <span style="opacity:0.4">${date}</span>` : ''}</span>
+        <span class="hd-actions">${del}</span>
       </div>`;
     }
-    container.innerHTML = html;
-  } else {
-    container.innerHTML = '<span style="color:var(--text-dim);font-size:0.78rem">Inga data ännu — berätta för Trixa eller lägg till nedan.</span>';
+    if (title === 'Hälsa' && healthNotes) {
+      html += `<div style="font-size:0.8rem;color:var(--text-dim);padding:0.4rem 0;line-height:1.4;font-style:italic">${esc(healthNotes)}</div>`;
+    }
+    return html;
   }
+
+  const html = renderCategory('Basdata', basdata) + renderCategory('Prestation', prestation) + renderCategory('Hälsa', halsa);
+  container.innerHTML = html || '<span style="color:var(--text-dim);font-size:0.78rem">Inga data ännu — berätta för Trixa eller lägg till nedan.</span>';
   } catch (e) { console.error('renderHealthData error:', e); }
 }
 
