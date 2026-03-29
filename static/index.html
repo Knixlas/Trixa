@@ -674,7 +674,7 @@ function renderHome() {
   document.getElementById('status-strip').innerHTML = `
     <div class="status-chip"><span class="dot dot-green"></span>${tierLabel}</div>
     <div class="status-chip"><span class="dot ${stravaDot}"></span>${stravaLabel}</div>
-    <div class="status-chip">${stravaData.activities.length} pass / 14d</div>`;
+    <div class="status-chip">${stravaData.activities.length} pass / 7d</div>`;
 
   // Tip box — fetch from coach brief API
   fetchCoachBrief();
@@ -715,15 +715,16 @@ async function renderGoals() {
   }
 }
 
-async function fetchCoachBrief() {
+async function fetchCoachBrief(refresh = false) {
   const tip = document.getElementById('tip-container');
-  if (cachedBrief) {
+  if (cachedBrief && !refresh) {
     renderBrief(cachedBrief);
     return;
   }
   tip.innerHTML = `<div class="tip-box"><div class="tip-label">Trixa tanker...</div><div class="tip-text" style="opacity:0.5">Analyserar din traning...</div></div>`;
   try {
-    const r = await fetch('/api/coach/brief', {headers: hdrs()});
+    const url = '/api/coach/brief' + (refresh ? '?refresh=1' : '');
+    const r = await fetch(url, {headers: hdrs()});
     if (r.ok) {
       cachedBrief = await r.json();
       renderBrief(cachedBrief);
@@ -790,29 +791,38 @@ async function renderNextStrength() {
     html += `<div style="font-size:0.95rem;font-weight:700;margin-bottom:0.3rem">${esc(s.title)}</div>`;
     if (s.purpose) html += `<div style="font-size:0.75rem;color:var(--accent);margin-bottom:0.5rem;font-style:italic">${esc(s.purpose)}</div>`;
     if (s.exercises && s.exercises.length > 0) {
-      html += '<table class="strength-table"><thead><tr><th>Ovning</th><th>Set x Rep</th><th>Vikt</th></tr></thead><tbody>';
+      html += '<table class="strength-table"><thead><tr><th>Ovning</th><th>Detaljer</th></tr></thead><tbody>';
       for (const ex of s.exercises) {
-        const setRep = `${ex.sets}x${ex.reps}${ex.unit === 's' ? 's' : ''}`;
-        let weight = '';
-        if (ex.weight_from && ex.weight_to && ex.weight_from !== ex.weight_to) {
-          weight = `${ex.weight_from}-${ex.weight_to} kg`;
-        } else if (ex.weight_from) {
-          weight = `${ex.weight_from} kg`;
+        let detail = '';
+        if (ex.weights && ex.weights.length > 0) {
+          // Progressive format: 3 set: 40kg×12 / 50kg×10 / 60kg×8
+          const parts = ex.weights.map((w, i) => {
+            const r = ex.reps_per_set ? ex.reps_per_set[i] : ex.reps;
+            return r ? `${w}kg\u00d7${r}` : `${w}kg`;
+          });
+          detail = `${ex.sets} set: ${parts.join(' / ')}`;
         } else {
-          weight = '-';
+          // Simple format: 3×12 — 10 kg  or  3×30s
+          const unit = ex.unit === 's' ? 's' : '';
+          const reps = ex.reps ? `${ex.sets}\u00d7${ex.reps}${unit}` : `${ex.sets} set`;
+          let weight = '';
+          if (ex.weight_from && ex.weight_to && ex.weight_from !== ex.weight_to) {
+            weight = ` \u2014 ${ex.weight_from}-${ex.weight_to} kg`;
+          } else if (ex.weight_from) {
+            weight = ` \u2014 ${ex.weight_from} kg`;
+          }
+          detail = reps + weight;
         }
-        const note = ex.note ? ` <span style="font-size:0.65rem;opacity:0.6">${esc(ex.note)}</span>` : '';
-        html += `<tr><td>${esc(ex.name)}${note}</td><td>${setRep}</td><td>${weight}</td></tr>`;
+        const note = ex.note ? `<br><span style="font-size:0.65rem;opacity:0.6">${esc(ex.note)}</span>` : '';
+        html += `<tr><td>${esc(ex.name)}</td><td>${detail}${note}</td></tr>`;
       }
       html += '</tbody></table>';
     } else if (s.details) {
       html += `<div style="font-size:0.8rem;color:var(--text-dim);line-height:1.5">${esc(s.details)}</div>`;
     }
     el.innerHTML = html;
-    // Auto-open if there's actual exercise data
-    if (s.exercises && s.exercises.length > 0) {
-      document.getElementById('card-strength').classList.add('open');
-    }
+    // Always open the strength card when there's a session
+    document.getElementById('card-strength').classList.add('open');
   } catch {
     el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Kunde inte ladda styrkepass</div>';
   }
@@ -1042,7 +1052,11 @@ async function sendMessage() {
         await new Promise(r => setTimeout(r, 500));
         await renderNextSession();
         await renderWeekPlan();
+        await renderNextStrength();
         appendMsg('assistant', null, null, '<div style="color:var(--accent);font-size:0.85rem">&#x1F4C5; Planen ar uppdaterad pa hemsidan!</div>');
+        // Refresh Trixa säger to reflect new plan
+        cachedBrief = null;
+        fetchCoachBrief(true);
       }
     }
     renderHome();
@@ -1122,7 +1136,7 @@ const SPORT_ICONS = {Lopning:'🏃', Cykel:'🚴', Sim:'🏊', Styrka:'💪', Pr
 
 async function fetchStrava() {
   try {
-    const r = await fetch('/api/strava/activities?days=14', {headers: hdrs()});
+    const r = await fetch('/api/strava/activities?days=7', {headers: hdrs()});
     if (r.ok) stravaData = await r.json();
   } catch {}
 }
@@ -1134,7 +1148,7 @@ function renderStravaActivities() {
     return;
   }
   if (!stravaData.activities.length) {
-    el.innerHTML = `<div style="color:var(--text-dim);font-size:0.85rem">Inga aktiviteter senaste 14 dagarna</div>
+    el.innerHTML = `<div style="color:var(--text-dim);font-size:0.85rem">Inga aktiviteter senaste 7 dagarna</div>
       <button class="strava-btn" onclick="syncStrava()">Synka Strava</button>`;
     return;
   }
@@ -1179,7 +1193,7 @@ async function connectStrava() {
 
 async function syncStrava() {
   try {
-    const r = await fetch('/api/strava/sync', {method: 'POST', headers: hdrs()});
+    const r = await fetch('/api/strava/sync', {method: 'POST', headers: hdrs(), body: JSON.stringify({})});
     if (!r.ok) {
       const text = await r.text();
       try { const j = JSON.parse(text); alert('Sync: ' + (j.detail || text)); }
@@ -1190,7 +1204,31 @@ async function syncStrava() {
     alert(`Synkat ${data.synced} aktiviteter!`);
     await fetchStrava();
     renderStravaActivities();
+    // Refresh Trixa säger with new data
+    cachedBrief = null;
+    fetchCoachBrief(true);
   } catch (e) { alert('Fel: ' + e.message); }
+}
+
+async function syncStravaFull() {
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = 'Laddar ner...'; }
+  try {
+    const r = await fetch('/api/strava/sync', {method: 'POST', headers: hdrs(), body: JSON.stringify({months: 24})});
+    if (!r.ok) {
+      const text = await r.text();
+      try { const j = JSON.parse(text); alert('Sync: ' + (j.detail || text)); }
+      catch { alert('Sync fel: ' + text); }
+      return;
+    }
+    const data = await r.json();
+    alert(`Klart! Laddade ner ${data.synced} aktiviteter (24 manader).`);
+    await fetchStrava();
+    renderStravaActivities();
+    cachedBrief = null;
+    fetchCoachBrief(true);
+  } catch (e) { alert('Fel: ' + e.message); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Ladda ner allt fran Strava'; } }
 }
 
 async function disconnectStrava() {
@@ -1207,7 +1245,8 @@ function renderStravaProfile() {
   const el = document.getElementById('strava-status');
   if (stravaData.connected) {
     el.innerHTML = `<div class="profile-row"><span class="label">Status</span><span style="color:#2ecc71">Kopplad</span></div>
-      <button class="strava-btn disconnect" onclick="disconnectStrava()" style="margin-top:0.5rem">Koppla fran</button>`;
+      <button class="strava-btn" onclick="syncStravaFull()" style="margin-top:0.5rem">Ladda ner allt fran Strava</button>
+      <button class="strava-btn disconnect" onclick="disconnectStrava()" style="margin-top:0.4rem">Koppla fran</button>`;
   } else {
     el.innerHTML = `<button class="strava-btn" onclick="connectStrava()">Koppla Strava</button>`;
   }
@@ -1415,8 +1454,32 @@ async function showApp() {
   } catch { chatHistory = []; }
   await fetchStrava();
   renderHome(); renderProfile();
-  // Wait for coach brief to load, then inject into empty chat
+
+  // ── Onboarding / opening message ──
+  // Priority: onboarding (new/incomplete profile) > coach brief (returning user)
   if (chatHistory.length === 0) {
+    const lastNudge = parseInt(localStorage.getItem('trixa_onboarding_nudge') || '0');
+    const daysSinceNudge = (Date.now() - lastNudge) / 86400000;
+    const isFirstVisit = lastNudge === 0;
+
+    // Show onboarding message on first visit, or re-nudge after 14 days if still incomplete
+    if (isFirstVisit || daysSinceNudge >= 14) {
+      try {
+        const ob = await fetch('/api/onboarding/status', {headers: hdrs()});
+        if (ob.ok) {
+          const od = await ob.json();
+          if (od.needs_onboarding && od.message) {
+            chatHistory = [{role: 'assistant', content: od.message}];
+            localStorage.setItem('trixa_onboarding_nudge', Date.now().toString());
+            renderChat();
+            switchTab('chat');
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    // Returning user with complete profile — inject coach brief
     try {
       const br = await fetch('/api/coach/brief', {headers: hdrs()});
       if (br.ok) {

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -25,10 +25,24 @@ from core.membership import (
     get_user_tier, can_send_message, can_use_feature,
     messages_remaining, trial_days_remaining,
 )
+from core.tools import get_all_tools, WEEKDAYS_SV
+from core.tool_handler import ToolResult, process_response
 
 SYSTEM_PROMPT_FILE = ROOT / "prompts" / "system_prompt.md"
 COACHING_KB_FILE = ROOT / "prompts" / "coaching_knowledge.md"
 PHASES_FILE = ROOT / "prompts" / "phases.md"
+DOCS_DIR = ROOT / "documents"
+
+# Key training doctrine docs injected as primary knowledge source.
+# Order matters: zones first (most referenced), then session types, then supporting topics.
+KEY_DOCS = [
+    "3.2 Instruktion för att Beräkna Träningszoner.md",
+    "3.1 Typer av Träningspass.md",
+    "3.4 Identifiering och Hantering av Överträning.md",
+    "3.5 Styrketräning i Olika Träningsfaser för Triathleter.md",
+    "3.7 Detaljerad Plan för Näringsintag under Hård Träning.md",
+]
+
 MODEL = "claude-sonnet-4-5"
 MAX_HISTORY = 20
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
@@ -60,202 +74,7 @@ class DiscountRequest(BaseModel):
     code: str
 
 
-# ── Helpers ──────────────────────────────────────────────────────
-
-WEEKDAYS_SV = ["mandag", "tisdag", "onsdag", "torsdag", "fredag", "lordag", "sondag"]
-
-SET_GOALS_TOOL = {
-    "name": "set_athlete_goals",
-    "description": (
-        "Spara atletens mal efter att ni diskuterat och kommit overens. "
-        "Anvand detta nar atleten och du har formulerat vision, sasongmal eller kortsiktigt mal. "
-        "Skicka BARA de falt som andras."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "vision": {"type": "string", "description": "Meningen med traningen — varfor tranar atleten? T.ex. 'Leva aktivt och prestera i Ironman'"},
-            "season_goal": {"type": "string", "description": "Sasongmal — konkret mal for sassongen. T.ex. 'Ironman Kalmar under 10:00, augusti 2026'"},
-            "short_term_goal": {"type": "string", "description": "Kortsiktigt mal — fokus kommande 4-6 veckor. T.ex. 'Bygga lopvolym till 45km/vecka utan skador'"},
-        },
-    },
-}
-
-LOG_TRAINING_TOOL = {
-    "name": "log_training_session",
-    "description": (
-        "Logga ett traningspass i traningsloggen. Anvand detta nar atleten berattar om ett pass "
-        "de genomfort, skickar en skärmdump fran Garmin/Strava, eller nar du tolkar passdata fran nagon kalla. "
-        "Fyll i sa manga falt som mojligt baserat pa informationen. "
-        "Anvand extra_data for information som inte har ett eget falt (t.ex. kadens, simtag, vattentemperatur). "
-        "Skriv coach_notes med din analys av passet."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "date": {"type": "string", "description": "Datum YYYY-MM-DD"},
-            "sport": {"type": "string", "enum": ["run", "bike", "swim", "strength", "other"]},
-            "title": {"type": "string", "description": "Kort titel, t.ex. 'Troskelintervaller 5x1km'"},
-            "duration_min": {"type": "number"},
-            "distance_km": {"type": "number"},
-            "avg_hr": {"type": "integer"},
-            "max_hr": {"type": "integer"},
-            "avg_power": {"type": "integer"},
-            "normalized_power": {"type": "integer"},
-            "pace": {"type": "string", "description": "T.ex. '5:45/km'"},
-            "tss": {"type": "number"},
-            "rpe": {"type": "integer", "description": "Rate of perceived exertion 1-10"},
-            "feeling": {"type": "string", "description": "Kort: bra, tungt, fantastiskt, slitet"},
-            "notes": {"type": "string", "description": "Atletens egna kommentarer"},
-            "coach_notes": {"type": "string", "description": "Din analys av passet — vad gick bra, vad kan forbattras"},
-            "source": {"type": "string", "enum": ["chat", "garmin_screenshot", "strava_screenshot", "manual"]},
-            "extra_data": {
-                "type": "object",
-                "description": "Ovriga datapunkter som ar relevanta men saknar eget falt. T.ex. {\"cadence\": 180, \"swim_strokes\": 42, \"splits\": [\"5:30\", \"5:25\", \"5:20\"]}",
-            },
-        },
-        "required": ["date", "sport"],
-    },
-}
-
-UPDATE_PROFILE_TOOL = {
-    "name": "update_athlete_profile",
-    "description": (
-        "Uppdatera atletens profil med viktig information som framkommer i samtalet. "
-        "Anvand detta nar atleten berattar om sin bakgrund, mal, skador, preferenser, etc. "
-        "Spara BARA fakta — inte tolkningar. T.ex. om atleten sager 'jag har gjort 13 Ironman' "
-        "spara ironman_finishes=13. Uppdatera tyst utan att fraga — det ar inte en plan, det ar fakta."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "experience_level": {"type": "string", "enum": ["beginner", "intermediate", "advanced"]},
-            "age": {"type": "integer"},
-            "weight_kg": {"type": "number"},
-            "years_training": {"type": "integer", "description": "Antal ar med traning"},
-            "ironman_finishes": {"type": "integer"},
-            "weekly_hours": {"type": "number", "description": "Tillgangliga traningstimmar per vecka"},
-            "next_race_name": {"type": "string", "description": "Nasta tavling, t.ex. 'Ironman Kalmar, 15 aug 2026'"},
-            "health_notes": {"type": "string", "description": "Skador, mediciner, begransningar"},
-            "goal": {"type": "string", "description": "Overgrippande mal"},
-        },
-    },
-}
-
-def _get_plan_tool():
-    """Build plan tool with today's date so Trixa knows where she is."""
-    today = datetime.now().strftime("%Y-%m-%d")
-    weekday = ["mandag","tisdag","onsdag","torsdag","fredag","lordag","sondag"][datetime.now().weekday()]
-    return {
-        "name": "plan_training_sessions",
-        "description": (
-            f"Spara traningspass i atletens plan. Idag ar {weekday} {today}. "
-            "KRITISKT: Datum i sessions MASTE vara exakt YYYY-MM-DD och matcha "
-            "EXAKT de dagar du namner i texten. Om du sager 'tisdag 25/3' MASTE date vara "
-            f"'2026-03-25' (aret ar {datetime.now().year}). "
-            "Dubbelkolla att varje datum stammer med veckodagen. "
-            "Du MASTE anropa detta verktyg varje gang en plan godkanns eller andras. "
-            "Vid andring: skicka HELA den uppdaterade planen (alla dagar kommande 7-10 dagar), "
-            "inte bara det andrade passet. Inkludera vilopass (sport='Vila', title='Vila'). "
-            "Vad du sparar ar exakt vad som visas pa Hem-sidan — texten i 'title' "
-            "ar det atleten ser. Se till att title matchar det du sager i chatten."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "sessions": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "date": {"type": "string", "description": f"YYYY-MM-DD. Idag = {today}"},
-                            "sport": {"type": "string", "description": "Lopning/Cykel/Sim/Styrka/Brick/Vila"},
-                            "title": {"type": "string", "description": "Exakt det som visas pa Hem-sidan. T.ex. 'Styrka 30min + Lop 35min Z2' eller 'Vila'"},
-                            "details": {"type": "string", "description": "Zoninfo, intervaller, puls/watt-granser"},
-                            "purpose": {"type": "string", "description": "Kort syfte, t.ex. 'Bygga aerob bas'"},
-                            "exercises": {
-                                "type": "array",
-                                "description": "For styrkepass: lista med ovningar. Utelamna for andra sporttyper.",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": {"type": "string", "description": "Ovningsnamn, t.ex. 'Knaboj'"},
-                                        "sets": {"type": "integer"},
-                                        "reps": {"type": "integer", "description": "Reps per set, eller sekunder om unit='s'"},
-                                        "unit": {"type": "string", "description": "Enhet: 'reps' (default) eller 's' for tid"},
-                                        "weight_from": {"type": "number", "description": "Vikt forsta set (kg)"},
-                                        "weight_to": {"type": "number", "description": "Vikt sista set (kg). Samma som weight_from om konstant."},
-                                        "note": {"type": "string", "description": "Extra info, t.ex. 'langsammt ner'"},
-                                    },
-                                    "required": ["name", "sets", "reps"],
-                                },
-                            },
-                        },
-                        "required": ["date", "sport", "title"],
-                    },
-                },
-            },
-            "required": ["sessions"],
-        },
-    }
-
-UPDATE_ZONES_TOOL = {
-    "name": "update_athlete_zones",
-    "description": (
-        "Uppdatera atletens nyckeltal/zoner. Anvand detta nar du foreslar justerade "
-        "troskelvarden baserat pa traningsdata. Skicka BARA de varden du vill andra."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "ftp": {"type": "integer", "description": "Ny FTP i watt"},
-            "css_per_100m": {"type": "string", "description": "Ny CSS, t.ex. '1:42'"},
-            "threshold_pace": {"type": "string", "description": "Ny troskelfart, t.ex. '4:20'"},
-            "threshold_hr": {"type": "integer", "description": "Ny troskelpuls i bpm"},
-            "max_hr": {"type": "integer", "description": "Ny max puls i bpm"},
-        },
-    },
-}
-
-WORKOUT_TOOL = {
-    "name": "create_workout_file",
-    "description": (
-        "Skapa ett strukturerat traningspass som pushas till Intervals.icu. "
-        "ANVAND ZONER for intensitet — inte absoluta pulsvarden. "
-        "For lopning: ange hr_zone (en zon) eller hr_zone_low + hr_zone_high (spann). "
-        "For cykling: ange power_zone eller power_zone_low + power_zone_high. "
-        "Zoner: 1=aterhamtning, 2=aerob bas, 3=tempo, 4=tröskel, 5=VO2max. "
-        "Ange description pa varje steg — det visas pa klockan."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "name": {"type": "string"},
-            "sport": {"type": "string", "enum": ["running", "biking", "swimming"]},
-            "steps": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "type": {"type": "string", "enum": ["warmup", "active", "rest", "cooldown"]},
-                        "duration_seconds": {"type": "integer"},
-                        "repeats": {"type": "integer"},
-                        "description": {"type": "string", "description": "Visas pa klockan, t.ex. 'Tröskel' eller 'Latt jogg'"},
-                        "hr_zone": {"type": "integer", "description": "HR-zon 1-5. For lopning/sim."},
-                        "hr_zone_low": {"type": "integer", "description": "Nedre HR-zon i spann, t.ex. 2 for Z2-Z4."},
-                        "hr_zone_high": {"type": "integer", "description": "Ovre HR-zon i spann, t.ex. 4 for Z2-Z4."},
-                        "power_zone": {"type": "integer", "description": "Power-zon 1-5. For cykling."},
-                        "power_zone_low": {"type": "integer", "description": "Nedre power-zon i spann."},
-                        "power_zone_high": {"type": "integer", "description": "Ovre power-zon i spann."},
-                    },
-                    "required": ["type", "duration_seconds", "description"],
-                },
-            },
-        },
-        "required": ["name", "sport", "steps"],
-    },
-}
-
+# ── System prompt assembly ───────────────────────────────────────
 
 def _build_system_prompt(profile: dict | None, activities: list[dict] | None = None,
                          coach_memories: list[dict] | None = None,
@@ -296,13 +115,11 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
                 parts.append(f"betyg: {a['rating']}/5")
                 if a.get("rating_comment"):
                     parts.append(f"kommentar: \"{a['rating_comment']}\"")
-                # Track preferences
                 t = a["type"]
                 if t not in rated_summary:
                     rated_summary[t] = []
                 rated_summary[t].append(a["rating"])
             lines.append(", ".join(parts))
-        # Add preference summary
         if rated_summary:
             lines.append("\nTraningspreferenser (baserat pa betyg):")
             for t, ratings in rated_summary.items():
@@ -313,21 +130,32 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
     else:
         template = template.replace("{RECENT_ACTIVITIES}", "Ingen Strava-koppling eller inga aktiviteter.")
 
-    # --- Append coaching knowledge base ---
+    # Append coaching knowledge base (condensed reference)
     try:
-        coaching_kb = COACHING_KB_FILE.read_text(encoding="utf-8")
-        template += "\n\n" + coaching_kb
+        template += "\n\n" + COACHING_KB_FILE.read_text(encoding="utf-8")
     except Exception:
         pass
 
-    # --- Append phase instructions ---
+    # Append phase instructions (condensed reference)
     try:
-        phases = PHASES_FILE.read_text(encoding="utf-8")
-        template += "\n\n" + phases
+        template += "\n\n" + PHASES_FILE.read_text(encoding="utf-8")
     except Exception:
         pass
 
-    # --- Inject athlete goals ---
+    # Inject key training doctrine documents as primary knowledge source.
+    # These take precedence over general knowledge — see "Kunskapsprioritet" in system prompt.
+    doc_sections = []
+    for doc_name in KEY_DOCS:
+        doc_path = DOCS_DIR / doc_name
+        try:
+            content = doc_path.read_text(encoding="utf-8").strip()
+            doc_sections.append(f"### {doc_name.split('.md')[0]}\n\n{content}")
+        except Exception:
+            pass
+    if doc_sections:
+        template += "\n\n## TRÄNARLÄRA (PRIMÄR KÄLLA)\n\n" + "\n\n---\n\n".join(doc_sections)
+
+    # Inject athlete goals
     if profile:
         goal_lines = []
         if profile.get("vision"):
@@ -342,7 +170,7 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
         else:
             template += "\n\n## Atletens mal\nInga mal satta annu. Fraga atleten om vision, sasongmal och kortsiktigt mal tidigt i samtalet."
 
-    # --- Inject athlete zones/key metrics ---
+    # Inject athlete zones/key metrics
     if profile:
         zone_lines = []
         if profile.get("ftp"):
@@ -359,15 +187,14 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
             template += "\n\n## Atletens nyckeltal\n" + "\n".join(zone_lines)
             template += "\nAnvand dessa varden for att berakna exakta zoner i alla pass."
 
-    # --- Inject current training plan ---
+    # Inject current training plan
     if current_plan:
         plan_lines = []
         for s in current_plan:
             d = s.get('date', '')
             weekday = ''
             try:
-                from datetime import datetime as dt2
-                parsed = dt2.strptime(d, "%Y-%m-%d")
+                parsed = datetime.strptime(d, "%Y-%m-%d")
                 weekday = WEEKDAYS_SV[parsed.weekday()]
                 today_str = now.strftime("%Y-%m-%d")
                 if d == today_str:
@@ -385,7 +212,7 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
             template += "Denna plan ar SATT och godkand av atleten. Andra den INTE utan att fraga.\n"
             template += "\n".join(plan_lines)
 
-    # --- Inject coach memory (relational observations) ---
+    # Inject coach memory (relational observations)
     if coach_memories:
         mem_lines = []
         for m in coach_memories[:10]:
@@ -406,6 +233,8 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
 
     return template
 
+
+# ── Helpers ──────────────────────────────────────────────────────
 
 def _get_auth(request: Request) -> tuple[str, str]:
     auth = request.headers.get("Authorization", "")
@@ -529,7 +358,6 @@ async def get_profile(request: Request):
 async def update_profile(request: Request):
     uid, token = _get_auth(request)
     body = await request.json()
-    # Whitelist allowed fields
     allowed = {
         "experience_level", "age", "weight_kg", "years_training",
         "ironman_finishes", "weekly_hours", "next_race_name",
@@ -539,6 +367,119 @@ async def update_profile(request: Request):
     if fields:
         db.update_profile(uid, token, fields)
     return {"ok": True}
+
+
+# ── Onboarding ───────────────────────────────────────────────────
+
+@app.get("/api/onboarding/status")
+async def onboarding_status(request: Request):
+    """Return what key info is missing and a level-adapted opening message.
+
+    Frontend uses this to inject Trixa's first message when profile is empty
+    or key fields are missing after 14+ days.
+    """
+    uid, token = _get_auth(request)
+    profile = db.get_profile(uid, token)
+
+    if not profile:
+        return {
+            "needs_onboarding": True,
+            "level": None,
+            "missing": ["experience_level", "goals", "weekly_hours"],
+            "message": (
+                "Hej! Jag ar Trixa — din personliga tranare. "
+                "For att kunna coacha dig pa basta satt behover jag lara kanna dig lite. "
+                "Berata: vad tranar du for, och hur ser din traning ut idag? "
+                "Ar du nybörjare, motionar du regelbudet, eller ar du en mer erfaren atlet?"
+            ),
+        }
+
+    level = profile.get("experience_level")
+    has_goals = bool(profile.get("vision") or profile.get("season_goal"))
+    has_hours = bool(profile.get("weekly_hours"))
+    has_hr_zone = bool(profile.get("threshold_hr"))
+    has_power = bool(profile.get("ftp"))
+    has_swim = bool(profile.get("css_per_100m"))
+    has_pace = bool(profile.get("threshold_pace"))
+
+    missing = []
+    if not level:
+        missing.append("experience_level")
+    if not has_goals:
+        missing.append("goals")
+    if not has_hours:
+        missing.append("weekly_hours")
+    if level == "advanced":
+        if not has_hr_zone:
+            missing.append("threshold_hr")
+        if not has_power:
+            missing.append("ftp")
+        if not has_swim:
+            missing.append("css_per_100m")
+    elif level == "intermediate":
+        if not has_hr_zone:
+            missing.append("threshold_hr")
+        if not has_pace:
+            missing.append("threshold_pace")
+
+    if not missing:
+        return {"needs_onboarding": False, "level": level, "missing": [], "message": None}
+
+    # Level-adapted opening message
+    name = profile.get("name") or profile.get("display_name") or ""
+    greeting = f"Hej {name}! " if name else "Hej! "
+
+    if not level:
+        message = (
+            f"{greeting}Vi har inte hunnit gå igenom grunderna än. "
+            "Berätta lite om dig — vad tränar du för och ungefär hur mycket tid har du per vecka?"
+        )
+    elif level == "beginner":
+        parts = []
+        if not has_goals:
+            parts.append("vad du vill uppnå med träningen")
+        if not has_hours:
+            parts.append("hur många timmar per vecka du har tillgängliga")
+        message = (
+            f"{greeting}Jag saknar lite info för att kunna planera din träning optimalt. "
+            f"Kan du berätta om {' och '.join(parts)}?"
+        )
+    elif level == "intermediate":
+        parts = []
+        if not has_goals:
+            parts.append("dina mål den här säsongen")
+        if not has_hours:
+            parts.append("tillgängliga träningstimmar per vecka")
+        if not has_hr_zone:
+            parts.append("din tröskelpuls — vet du den?")
+        message = (
+            f"{greeting}Lite grundinfo saknas fortfarande. "
+            f"Snabbaste vägen framåt: {', '.join(parts)}."
+        )
+    else:  # advanced
+        parts = []
+        if not has_goals:
+            parts.append("din säsongsplan och huvudtävling")
+        if not has_power:
+            parts.append("FTP (har du wattmätare?)")
+        if not has_hr_zone:
+            parts.append("tröskelpuls")
+        if not has_swim:
+            parts.append("CSS (kritisk simhastighet per 100m)")
+        if not has_hours:
+            parts.append("veckovolym i timmar")
+        message = (
+            f"{greeting}För att coacha dig på avancerad nivå behöver jag dina nyckeltal. "
+            f"Vad är din nuvarande {', '.join(parts[:3])}?"
+            + (f" (och {', '.join(parts[3:])})" if len(parts) > 3 else "")
+        )
+
+    return {
+        "needs_onboarding": True,
+        "level": level,
+        "missing": missing,
+        "message": message,
+    }
 
 
 # ── Subscription ─────────────────────────────────────────────────
@@ -595,7 +536,6 @@ async def chat(req: ChatRequest, request: Request):
         coach_memories = db.get_coach_memories(uid, token)
     except Exception:
         coach_memories = None
-    # Get current plan for next 10 days
     current_plan = None
     try:
         from_d = datetime.now().strftime("%Y-%m-%d")
@@ -605,7 +545,7 @@ async def chat(req: ChatRequest, request: Request):
         pass
     system_prompt = _build_system_prompt(profile, activities, coach_memories, current_plan)
 
-    # Prepare messages (strip _images from history to avoid sending base64 twice)
+    # Prepare messages
     clean = []
     for m in req.history[-MAX_HISTORY:]:
         clean.append({"role": m["role"], "content": m.get("content", "")})
@@ -629,124 +569,30 @@ async def chat(req: ChatRequest, request: Request):
         clean.append({"role": "user", "content": req.message})
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    tools = [WORKOUT_TOOL, _get_plan_tool(), UPDATE_ZONES_TOOL, SET_GOALS_TOOL, UPDATE_PROFILE_TOOL, LOG_TRAINING_TOOL] if can_use_feature(tier, "workout_export") else None
+    tools = get_all_tools() if can_use_feature(tier, "workout_export") else None
 
     # Non-streaming when tools enabled (to handle tool_use blocks)
     if tools:
         messages_for_api = list(clean)
-        workout_data = None
-        zones_update = None
-        goals_update = None
-        plan_saved = False
-        text_parts = []
-        max_rounds = 5  # safety limit
+        result = ToolResult()
+        max_rounds = 5
 
         for _round in range(max_rounds):
             response_obj = api_client.messages.create(
                 model=MODEL, max_tokens=2048, system=system_prompt,
                 messages=messages_for_api, tools=tools,
             )
+            tool_results = process_response(response_obj, uid, token, result)
 
-            # Collect text and tool_use blocks
-            tool_results = []
-            for block in response_obj.content:
-                if block.type == "text":
-                    text_parts.append(block.text)
-                elif block.type == "tool_use":
-                    # Process tool
-                    tool_result_content = "OK"
-                    if block.name == "create_workout_file":
-                        workout_data = block.input
-                        tool_result_content = "Workout skapad"
-                    elif block.name == "update_athlete_zones":
-                        zones_update = block.input
-                        tool_result_content = "Nyckeltal uppdaterade"
-                    elif block.name == "set_athlete_goals":
-                        goals_update = block.input
-                        try:
-                            fields = {k: v for k, v in goals_update.items() if v}
-                            if fields:
-                                fields["goal_updated_at"] = datetime.now().isoformat()
-                                db.update_profile(uid, token, fields)
-                            tool_result_content = "Mal sparade"
-                        except Exception as e:
-                            tool_result_content = f"Fel: {e}"
-                            print(f"Goals save error: {e}")
-                    elif block.name == "update_athlete_profile":
-                        try:
-                            allowed = {"experience_level", "age", "weight_kg", "years_training",
-                                       "ironman_finishes", "weekly_hours", "next_race_name",
-                                       "health_notes", "goal"}
-                            fields = {k: v for k, v in block.input.items() if k in allowed and v is not None}
-                            if fields:
-                                db.update_profile(uid, token, fields)
-                                print(f"[profile] Updated: {list(fields.keys())}")
-                            tool_result_content = "Profil uppdaterad"
-                        except Exception as e:
-                            tool_result_content = f"Fel: {e}"
-                            print(f"Profile update error: {e}")
-                    elif block.name == "plan_training_sessions":
-                        try:
-                            sessions = block.input.get("sessions", [])
-                            db.upsert_planned_sessions_batch(uid, sessions)
-                            plan_saved = True
-                            tool_result_content = f"Sparade {len(sessions)} pass i planen"
-                            print(f"[plan] Saved {len(sessions)} sessions")
-                        except Exception as e:
-                            tool_result_content = f"Fel: {e}"
-                            print(f"Plan save error: {e}")
-                    elif block.name == "log_training_session":
-                        try:
-                            entry = dict(block.input)
-                            entry["user_id"] = uid
-                            # Clean up: remove None values
-                            entry = {k: v for k, v in entry.items() if v is not None}
-                            # Convert extra_data to JSON string if present
-                            import json as json_mod
-                            if "extra_data" in entry and isinstance(entry["extra_data"], dict):
-                                entry["extra_data"] = json_mod.dumps(entry["extra_data"])
-                            admin = db.get_admin_client()
-                            admin.table("training_log").insert(entry).execute()
-                            missing = []
-                            if not entry.get("duration_min"): missing.append("tid")
-                            if not entry.get("distance_km"): missing.append("distans")
-                            if not entry.get("avg_hr"): missing.append("puls")
-                            if not entry.get("rpe"): missing.append("anstrangning (RPE)")
-                            if missing:
-                                tool_result_content = f"Pass loggat! Saknas: {', '.join(missing)} — fraga atleten."
-                            else:
-                                tool_result_content = "Pass loggat med all central data!"
-                            print(f"[training_log] Logged: {entry.get('date')} {entry.get('sport')}")
-                        except Exception as e:
-                            tool_result_content = f"Fel vid loggning: {e}"
-                            print(f"Training log error: {e}")
-
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": tool_result_content,
-                    })
-
-            # If no tool calls, we're done
             if response_obj.stop_reason != "tool_use":
                 break
 
-            # Send tool results back to Claude for follow-up text
             messages_for_api.append({"role": "assistant", "content": response_obj.content})
             messages_for_api.append({"role": "user", "content": tool_results})
 
-        response_text = "\n".join(text_parts)
+        response_text = "\n".join(result.text_parts)
         _save_conv(uid, token, req.history, req.message, response_text)
-        result = {"text": response_text}
-        if workout_data:
-            result["workout"] = workout_data
-        if zones_update:
-            result["zones_update"] = zones_update
-        if goals_update:
-            result["goals_update"] = goals_update
-        if plan_saved:
-            result["plan_saved"] = True
-        return result
+        return result.to_response()
 
     # Streaming (no tools)
     def stream_response():
@@ -933,25 +779,21 @@ async def plan_status(request: Request):
     """Return rolling 7-day plan from planned_sessions + Strava overlay."""
     uid, token = _get_auth(request)
 
-    from datetime import datetime, timedelta
     DAYS_SHORT = ["Man", "Tis", "Ons", "Tor", "Fre", "Lor", "Son"]
     today = datetime.now()
     from_date = today.strftime("%Y-%m-%d")
     to_date = (today + timedelta(days=6)).strftime("%Y-%m-%d")
 
-    # Get planned sessions from DB
     try:
         planned = db.get_planned_sessions(uid, token, from_date, to_date)
     except Exception:
         planned = []
 
-    # Get Strava activities for today (in case already trained)
     try:
         activities = db.get_recent_strava_activities(uid, token, days=1)
     except Exception:
         activities = []
 
-    # Build day-by-day
     days = []
     has_plan = len(planned) > 0
     for i in range(7):
@@ -960,7 +802,6 @@ async def plan_status(request: Request):
         day_short = DAYS_SHORT[d.weekday()]
         is_today = (i == 0)
 
-        # Find planned sessions for this day
         day_plans = [p for p in planned if p.get("date") == date_str]
         if day_plans:
             plan_title = " + ".join(p.get("title", "") for p in day_plans)
@@ -971,7 +812,6 @@ async def plan_status(request: Request):
             plan_details = ""
             plan_purpose = ""
 
-        # Find actual activities
         day_activities = [a for a in activities if a.get("date") == date_str]
         actual_summary = ""
         if day_activities:
@@ -983,7 +823,6 @@ async def plan_status(request: Request):
                 parts.append(" ".join(p))
             actual_summary = " + ".join(parts)
 
-        # Color status
         if day_activities:
             is_rest = plan_title and ("vila" in plan_title.lower())
             status = "yellow" if is_rest else "green"
@@ -1016,17 +855,17 @@ async def next_strength(request: Request):
         planned = db.get_planned_sessions(uid, token, from_date, to_date)
     except Exception:
         return {"session": None}
+
+    DAYS_SHORT = ["Man", "Tis", "Ons", "Tor", "Fre", "Lor", "Son"]
     for s in planned:
         sport = (s.get("sport") or "").lower()
         title = (s.get("title") or "").lower()
         if "styrka" in sport or "styrka" in title or "strength" in sport:
-            WEEKDAYS_SV_SHORT = ["Man", "Tis", "Ons", "Tor", "Fre", "Lor", "Son"]
             d = s.get("date", "")
             weekday = ""
             try:
-                from datetime import datetime as dt2
-                parsed = dt2.strptime(d, "%Y-%m-%d")
-                weekday = WEEKDAYS_SV_SHORT[parsed.weekday()]
+                parsed = datetime.strptime(d, "%Y-%m-%d")
+                weekday = DAYS_SHORT[parsed.weekday()]
             except Exception:
                 pass
             return {
@@ -1036,7 +875,7 @@ async def next_strength(request: Request):
                     "title": s.get("title"),
                     "details": s.get("details"),
                     "purpose": s.get("purpose"),
-                    "exercises": s.get("exercises"),  # JSONB array
+                    "exercises": s.get("exercises"),
                 }
             }
     return {"session": None}
@@ -1045,29 +884,24 @@ async def next_strength(request: Request):
 # ── Coach Brief (for dashboard) ──────────────────────────────────
 
 @app.get("/api/coach/brief")
-async def coach_brief(request: Request):
-    """Generate Trixa's current analysis for the dashboard 'Tank pa' section.
-    Returns a short coaching nudge based on recent activities + coach memory.
-    Cached per user per day to avoid repeated API calls.
-    """
+async def coach_brief(request: Request, refresh: int = 0):
+    """Generate Trixa's current analysis for the dashboard 'Tank pa' section."""
     uid, token = _get_auth(request)
 
-    # Check if we have a cached brief from today
-    try:
-        cached = db.get_coach_brief(uid, token)
-        if cached:
-            return {"brief": cached["brief"], "follow_up": cached.get("follow_up")}
-    except Exception:
-        pass
+    if not refresh:
+        try:
+            cached = db.get_coach_brief(uid, token)
+            if cached:
+                return {"brief": cached["brief"], "follow_up": cached.get("follow_up")}
+        except Exception:
+            pass
 
-    # Build context from Strava + profile
     profile = db.get_profile(uid, token)
     try:
         activities = db.get_recent_strava_activities(uid, token, days=14)
     except Exception:
         activities = []
 
-    # Get coach memory observations
     try:
         memories = db.get_coach_memories(uid, token)
     except Exception:
@@ -1076,7 +910,6 @@ async def coach_brief(request: Request):
     if not activities and not memories:
         return {"brief": "Koppla Strava eller chatta med mig sa jag kan lara kanna dig!", "follow_up": None}
 
-    # Build a compact context for Claude
     act_lines = []
     for a in (activities or [])[:10]:
         parts = [f"{a['date']}: {a['type']}"]
@@ -1093,23 +926,21 @@ async def coach_brief(request: Request):
         name = profile.get("name") or profile.get("display_name") or ""
 
     now = datetime.now()
-    weekday = ["mandag","tisdag","onsdag","torsdag","fredag","lordag","sondag"][now.weekday()]
+    weekday = WEEKDAYS_SV[now.weekday()]
 
-    # Get today's planned session and yesterday's activity for comparison
     plan_today = ""
-    yesterday_activity = ""
     try:
         today_str = now.strftime("%Y-%m-%d")
-        yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
         plan_sessions = db.get_planned_sessions(uid, token, today_str, today_str)
         if plan_sessions:
             plan_today = ", ".join(p.get("title", "") for p in plan_sessions)
     except Exception:
         pass
 
-    # Find yesterday's activity
+    yesterday_activity = ""
+    yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
     for a in (activities or []):
-        if a.get("date") == (now - timedelta(days=1)).strftime("%Y-%m-%d"):
+        if a.get("date") == yesterday_str:
             parts = [a.get("type", "")]
             if a.get("duration_min"): parts.append(f"{int(a['duration_min'])}min")
             if a.get("distance_km"): parts.append(f"{a['distance_km']}km")
@@ -1156,14 +987,12 @@ Skriv en kort proaktiv dashboardanalys."""
         )
         brief_text = response.content[0].text
 
-        # Try to extract follow-up day
         follow_up = None
         import re
         fu_match = re.search(r'[Aa]terkommer?\s+(?:pa\s+)?(\w+dag)', brief_text)
         if fu_match:
             follow_up = fu_match.group(1).capitalize()
 
-        # Cache the brief
         try:
             db.save_coach_brief(uid, brief_text, follow_up)
         except Exception:
@@ -1231,7 +1060,7 @@ async def create_checkout(request: Request):
 
     uid, _ = _get_auth(request)
     body = await request.json()
-    plan = body.get("plan", "monthly")  # monthly or yearly
+    plan = body.get("plan", "monthly")
 
     import stripe
     stripe.api_key = STRIPE_SECRET
@@ -1289,9 +1118,7 @@ async def stripe_webhook(request: Request):
 
     elif event["type"] in ("customer.subscription.deleted", "customer.subscription.updated"):
         sub = event["data"]["object"]
-        stripe_sub_id = sub.get("id")
         status = sub.get("status")
-        # Find user by stripe subscription id
         user_id = sub.get("metadata", {}).get("user_id")
         if user_id and status in ("canceled", "unpaid", "past_due"):
             db.update_subscription(user_id, {
@@ -1397,7 +1224,6 @@ async def strava_callback(request: Request, code: str = "", state: str = "", err
     if not user_id:
         return RedirectResponse("/?strava=error")
 
-    # Get user's own Strava credentials
     admin = db.get_admin_client()
     profile_row = admin.table("profiles").select("strava_client_id, strava_client_secret").eq("id", user_id).execute()
     cid = ""
@@ -1412,7 +1238,6 @@ async def strava_callback(request: Request, code: str = "", state: str = "", err
         tokens = exchange_code(code, redirect_uri, client_id=cid, client_secret=secret)
         db.save_strava_tokens(user_id, tokens)
 
-        # Initial sync — 12 months of history for new athletes
         import time
         after = int(time.time()) - 365 * 86400
         raw_activities = get_activities(tokens["access_token"], after=after, max_pages=10)
@@ -1437,13 +1262,19 @@ async def strava_sync(request: Request):
     import time, traceback
 
     try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    months = int(body.get("months", 6))
+
+    try:
         strava_tokens = ensure_fresh_token(strava_tokens, client_id=cid, client_secret=secret)
         if strava_tokens.get("_refreshed"):
             db.update_strava_tokens(uid, strava_tokens)
 
-        # Regular sync — 6 months
-        after = int(time.time()) - 180 * 86400
-        raw = get_activities(strava_tokens["access_token"], after=after)
+        after = int(time.time()) - months * 30 * 86400
+        max_pages = 10 if months > 6 else 5
+        raw = get_activities(strava_tokens["access_token"], after=after, max_pages=max_pages)
         parsed = [parse_activity(a) for a in raw]
         count = db.upsert_strava_activities(uid, parsed)
         return {"synced": count}

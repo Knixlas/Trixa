@@ -127,6 +127,8 @@ def profile_to_dict(profile: dict) -> dict:
     # Notes
     for k in ("health_notes", "preferences", "notes"):
         if profile.get(k): d[k] = profile[k]
+    # Strength
+    if profile.get("strength_program"): d["strength_program"] = profile["strength_program"]
     return d
 
 

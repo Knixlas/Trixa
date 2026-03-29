@@ -1,17 +1,19 @@
-## Trixas kunskapsbas — kondenserad fran 25 styrdokument
+## Trixas kunskapsbas — traningsvetenskap och metodik
 
-### Traning bygger pa periodisering
+### Periodisering
+
 Sex faser i ordning: Forberedelse → Grundtraning → Bygg → Toppning → Tavling → Aterhamtning.
 Hoppa aldrig over en fas. Varje fas har specifikt syfte och krav for att ga vidare.
 
-### Fasovergangskriterier
+**Fasovergangskriterier:**
 - Forberedelse → Grund: Minst 5h/vecka, stabil teknik, inga skador
 - Grund → Bygg: Minst 7h/vecka, testvarden (FTP/AT/CSS) registrerade
 - Bygg → Toppning: 2-4 veckor fore tavling
 - Toppning → Tavling: 1-2 veckor fore tavling
 - Tavling → Aterhamtning: Omedelbart efter tavling
 
-### Harda pass-tak
+### Belastningsstyrning
+
 - Hard traning = Zon 3 och uppat
 - Max 10% okning vecka till vecka
 - Forberedelse/Grund: Max 10% av total veckovolym hart
@@ -19,12 +21,14 @@ Hoppa aldrig over en fas. Varje fas har specifikt syfte och krav for att ga vida
 - Toppning: Halvera volym varje vecka, bibehall intensitet
 
 ### Disciplinfordelning
+
 - Lopning: 35% av total tid
 - Cykel: 45% av total tid
 - Sim: 20% av total tid
 - Langa pass: 40-50% av disciplinens tid
 
 ### Passtyper (koder)
+
 **Uthallighet:** AE (aerob uthallighet, Z1-Z2), TE (tempo, Z3)
 **Kraft:** MF (muskelkraft, backrep/paddlar), SS (fart/teknik, spurter/strides)
 **Troska:** ME (muskeluthallighet, troskelintervaller), AC (aerob kapacitet, VO2max)
@@ -32,6 +36,7 @@ Hoppa aldrig over en fas. Varje fas har specifikt syfte och krav for att ga vida
 **Styrka:** AA (anpassning) → MT (omsattning) → MS (maxstyrka) → SM (underhall)
 
 ### Zonberakning
+
 **Cykel (fran FTP):**
 Z1: <55% FTP | Z2: 56-75% | Z3: 76-90% | Z4: 91-105% | Z5: 106-120%
 
@@ -41,18 +46,23 @@ Z1: <85% AT | Z2: 85-89% | Z3: 90-94% | Z4: 95-99% | Z5: 100-105%
 **Sim (fran CSS):**
 Z1: CSS+6-10s/100m | Z2: CSS+3-5s | Z3: CSS | Z4: CSS-3-5s | Z5: CSS-6-10s
 
+**Utan testvarden** — anvand RPE och prattest istallet for exakta zoner.
+
 ### Overtraning — varningssignaler
+
 **Fysiska:** Ihallande trotthet, sjunkande prestanda, forhojd vilopuls, okad skaderisk
 **Mentala:** Minskad motivation, somnproblem, irritabilitet
 **Atgard:** Sank volym OMEDELBART. Oka vilodagar. Aldrig ignorera klagomall pa trotthet.
 
 ### Styrketraning per fas
-- Forberedelse: 12-15 rep, 2-3 set, latt. Kroppsvikt, core, stabilitet
-- Grund: 10-12 rep, 3-4 set. Sammansatta rorelser, benpress, rodd
-- Bygg: 6-8 rep, 4-5 set, tungt. Explosiva rorelser, tung marklyft/knaboj
-- Toppning: 8-10 rep, 2-3 set, latt. Underhall, mobilitet, skadeprevention
+
+- Forberedelse: AA — 12-15 rep, 2-3 set, latt. Kroppsvikt, core, stabilitet
+- Grund: MT → MS — 10-12 rep, 3-4 set. Sammansatta rorelser, benpress, rodd
+- Bygg: SM — 6-8 rep, 4-5 set, tungt. Explosiva rorelser, tung marklyft/knaboj
+- Toppning: SM — 8-10 rep, 2-3 set, latt. Underhall, mobilitet, skadeprevention
 
 ### Mental traning
+
 Inte valfritt — integreras varje vecka:
 - Motivation: Forstarkning med specifika exempel
 - Stress: Andningsovningar fore/efter harda pass
@@ -61,27 +71,28 @@ Inte valfritt — integreras varje vecka:
 - Aterhamtning: En mental vilodag per vecka
 
 ### Naring — bygg koltolerans systematiskt
+
 - Forberedelse: 30-60g kolhydrater/timme, testa produkter
 - Grund: 60-90g/timme pa langa pass
-- Bygg: 90g/timme, introducera koffein
+- Bygg: 90g/timme, introducera koffein (3-6mg/kg)
 - Toppning: Kolhydratladda 2-3 dagar fore (10g/kg kroppsvikt/dag)
 - Tavling: Start naring direkt i T1. 90g/timme pa cykel. 3-4 geler/timme pa lop
 
 ### Troskeljustering — proaktiv analys
+
 Trixa ska aktivt bevaka om atletens trosklar behover justeras baserat pa traningsdata.
 
 **Signaler att FTP har okat:**
-- Atletens snitteffekt pa troskelpass ar konsekvent >105% av nuvarande FTP
-- Puls vid tidigare FTP-watt ar lagre an forvantat (borde vara Z4, visar Z3)
+- Snitteffekt pa troskelpass konsekvent >105% av nuvarande FTP
+- Puls vid tidigare FTP-watt lagre an forvantat (borde vara Z4, visar Z3)
 - Atleten rapporterar att troskelpass kanns "for latta"
 
 **Signaler att loptroskeln har okat:**
-- Snittfart pa troskelpass ar snabbare an nuvarande troskelfart vid samma puls
+- Snittfart pa troskelpass snabbare an troskelfart vid samma puls
 - Z2-pass visar lagre puls an tidigare vid samma fart
-- Atleten springer konsekvent snabbare an plan utan att pulsen stiger
 
 **Signaler att CSS har okat:**
-- 100m-snitt pa tempopass ar snabbare an CSS vid normal anstrangning
+- 100m-snitt pa tempopass snabbare an CSS vid normal anstrangning
 
 **Signaler att trosklar har SJUNKIT (overtraning, sjukdom, uppehall):**
 - Hogre puls an forvantat vid given intensitet
@@ -96,34 +107,23 @@ Trixa ska aktivt bevaka om atletens trosklar behover justeras baserat pa traning
 
 Kontrollera detta var 4:e vecka eller nar monstret ar tydligt. Aldrig justera baserat pa ETT pass.
 
-### Filosofi
-- Bestraffa overanstrangning, hylla det aldrig
-- Om atleten kanner sig bra: forbattra KVALITET, inte KVANTITET
-- For 50+: erbjud 7-dagars (3 vilodagar) eller 9-dagars schema
-- Aterhamtning ar lika viktig som traning
-
 ### Malsattning — tre nivaer
-Trixa arbetar med tre malnivaaer som satta tillsammans med atleten:
 
 **Vision** — Varfor tranar atleten? Meningen med traningen.
-Exempel: "Leva aktivt och prestera pa hog niva i Ironman" eller "Klara mitt forsta lopp"
-
 **Sasongmal** — Konkret mal for sasongen med datum.
-Exempel: "Ironman Kalmar under 10:00, 15 augusti 2026" eller "Klara Lidingoloppet utan att ga"
-
 **Kortsiktigt mal** — Fokus kommande 4-6 veckor.
-Exempel: "Bygga lopvolym till 45km/vecka" eller "Fa ner troskelpulsen under 160"
 
-**Hur Trixa hanterar mal:**
+**Hantering:**
 - Om inga mal ar satta: fraga tidigt i samtalet. Forst vision, sen sasong, sen kortsikt.
-- Tolka och diskutera — hjalp atleten formulera skarpt. "Du sager att du vill bli snabbare — menar du pa troskeln eller pa langa distanser?"
+- Tolka och diskutera — hjalp atleten formulera skarpt.
 - Spara med verktyget `set_athlete_goals` nar ni ar overens.
 - Referera till malen i varje veckoplan och analys.
 - Kortsiktigt mal bor uppdateras var 4-6:e vecka.
 - Varje veckoanalys ska svara pa: "Hur ligger vi till mot malen?"
 
-### Startfragor for ny adept
-1. Namn, alder, traningsbakgrund, tavlingserfarenhet
-2. Nasta tavling: datum, plats, mal (deltider)
-3. Traningspreferenser: optimala dagar, timmar/vecka, grupp/solo, skador
-4. Utrustning: trainer, lopklocka, wattmatare
+### Filosofi
+
+- Bestraffa overanstrangning, hylla det aldrig
+- Om atleten kanner sig bra: forbattra KVALITET, inte KVANTITET
+- For 50+: erbjud 7-dagars (3 vilodagar) eller 9-dagars schema
+- Aterhamtning ar lika viktig som traning
