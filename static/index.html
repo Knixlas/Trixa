@@ -1609,7 +1609,6 @@ async function renderProfile() {
       document.getElementById('p-im').value = d.profile.ironman_finishes || '';
       document.getElementById('p-hours').value = d.profile.weekly_hours || '';
       document.getElementById('p-race').value = d.profile.next_race_name || '';
-      document.getElementById('p-health').value = d.profile.health_notes || '';
       // Health & body
       renderHealthData(d.profile);
     }
@@ -1626,7 +1625,6 @@ async function saveAthleteProfile() {
   const im = document.getElementById('p-im').value;
   const hours = document.getElementById('p-hours').value;
   const race = document.getElementById('p-race').value;
-  const health = document.getElementById('p-health').value;
   if (level) data.experience_level = level;
   if (age) data.age = parseInt(age);
   if (weight) data.weight_kg = parseFloat(weight);
@@ -1634,7 +1632,6 @@ async function saveAthleteProfile() {
   if (im) data.ironman_finishes = parseInt(im);
   if (hours) data.weekly_hours = parseFloat(hours);
   if (race) data.next_race_name = race;
-  if (health) data.health_notes = health;
   try {
     const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
     alert(r.ok ? 'Profil sparad!' : 'Kunde inte spara');
@@ -1747,17 +1744,22 @@ async function addHealthDataEntry() {
   const valInput = document.getElementById('hd-new-val');
   const key = keyInput.value.trim().toLowerCase().replace(/\s+/g, '_');
   const val = valInput.value.trim();
-  if (!key || !val) return;
+  if (!key || !val) { alert('Fyll i både nyckel och värde'); return; }
   keyInput.value = '';
   valInput.value = '';
   const today = new Date().toISOString().slice(0, 10);
   try {
-    await fetch('/api/profile/health-data', {
+    const r = await fetch('/api/profile/health-data', {
       method: 'POST', headers: hdrs(),
       body: JSON.stringify({[key]: {value: val, noted_at: today}}),
     });
-    renderProfile();
-  } catch (e) { console.error(e); }
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert('Kunde inte spara: ' + (err.detail || r.status));
+      return;
+    }
+    await renderProfile();
+  } catch (e) { alert('Fel: ' + e.message); }
 }
 
 async function removeHealthDataEntry(key) {
@@ -1858,8 +1860,9 @@ async function setSelfAssessment(val) {
 }
 
 function renderHealthData(profile) {
-  // DominaTrixa toggle state
-  document.getElementById('domina-toggle').checked = isDomina();
+  // DominaTrixa toggle state (may not exist if overview not rendered yet)
+  const dominaEl = document.getElementById('domina-toggle');
+  if (dominaEl) dominaEl.checked = isDomina();
   // Status tags
   renderStatusTags(profile);
   // Fixed fields
@@ -1867,8 +1870,6 @@ function renderHealthData(profile) {
   if (profile.height_cm) document.getElementById('p-height').value = profile.height_cm;
   if (profile.resting_hr) document.getElementById('p-resting').value = profile.resting_hr;
   if (profile.blood_pressure) document.getElementById('p-bp').value = profile.blood_pressure;
-  if (profile.medications) document.getElementById('p-meds').value = profile.medications;
-  if (profile.injuries) document.getElementById('p-injuries').value = profile.injuries;
 
   // Self-assessment smileys
   if (profile.self_assessment) {
