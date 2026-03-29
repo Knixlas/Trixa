@@ -462,6 +462,9 @@ async def update_profile(request: Request):
         "medications", "injuries", "self_assessment",
     }
     fields = {k: v for k, v in body.items() if k in allowed and v is not None}
+    # Allow direct health_data writes (for delete/replace operations)
+    if "health_data" in body and isinstance(body["health_data"], dict):
+        fields["health_data"] = body["health_data"]
     if fields:
         db.update_profile(uid, token, fields)
     return {"ok": True}

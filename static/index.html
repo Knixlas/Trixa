@@ -571,15 +571,18 @@ input:focus { border-color: var(--accent); }
           <div class="profile-input"><label>År med träning</label><input type="number" id="p-years" placeholder="12"></div>
           <div class="profile-input"><label>Ironman-starter</label><input type="number" id="p-im" placeholder="13"></div>
         </div>
-        <div class="profile-input"><label>Mediciner</label><input type="text" id="p-meds" placeholder="T.ex. Levaxin, Metformin"></div>
-        <div class="profile-input"><label>Skador / begränsningar</label><input type="text" id="p-injuries" placeholder="T.ex. ont i vänster knä sedan mars"></div>
-        <div class="profile-input"><label>Hälsoanteckningar</label><textarea id="p-health" placeholder="Övrigt" rows="3" style="width:100%;resize:vertical;font-size:0.9rem;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-family:inherit"></textarea></div>
-        <button class="btn btn-sm" onclick="saveHealthProfile();saveAthleteProfile()" style="margin-top:0.5rem">Spara</button>
+        <button class="btn btn-sm" onclick="saveHealthProfile();saveAthleteProfile()" style="margin-top:0.5rem">Spara mätvärden</button>
 
-        <!-- Trixa vet också -->
-        <div id="trixa-health-data" style="margin-top:1rem;display:none">
-          <h4 style="font-size:0.85rem;opacity:0.7;margin-bottom:0.5rem">Trixa vet också:</h4>
+        <!-- Trixa vet också — editable health data -->
+        <div style="margin-top:1rem">
+          <h4 style="font-size:0.85rem;opacity:0.7;margin-bottom:0.3rem">Trixa vet också:</h4>
+          <p style="font-size:0.7rem;color:var(--text-dim);margin-bottom:0.5rem">Berätta för Trixa i chatten, eller lägg till manuellt nedan.</p>
           <div id="health-data-list"></div>
+          <div style="display:flex;gap:0.3rem;margin-top:0.5rem">
+            <input type="text" id="hd-new-key" placeholder="T.ex. Mediciner" style="flex:1;font-size:0.8rem;padding:0.4rem 0.6rem">
+            <input type="text" id="hd-new-val" placeholder="T.ex. Levaxin 150mcg" style="flex:2;font-size:0.8rem;padding:0.4rem 0.6rem">
+            <button class="btn btn-sm" onclick="addHealthDataEntry()" style="padding:0.4rem 0.8rem;font-size:0.8rem">+</button>
+          </div>
         </div>
       </div>
 
@@ -1739,6 +1742,39 @@ async function toggleExerciseDone(date, name, btn) {
   }
 }
 
+async function addHealthDataEntry() {
+  const keyInput = document.getElementById('hd-new-key');
+  const valInput = document.getElementById('hd-new-val');
+  const key = keyInput.value.trim().toLowerCase().replace(/\s+/g, '_');
+  const val = valInput.value.trim();
+  if (!key || !val) return;
+  keyInput.value = '';
+  valInput.value = '';
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    await fetch('/api/profile/health-data', {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({[key]: {value: val, noted_at: today}}),
+    });
+    renderProfile();
+  } catch (e) { console.error(e); }
+}
+
+async function removeHealthDataEntry(key) {
+  if (!confirm(`Ta bort "${key.replace(/_/g, ' ')}"?`)) return;
+  try {
+    const r = await fetch('/api/profile', {headers: hdrs()});
+    const d = await r.json();
+    const hd = d.profile?.health_data || {};
+    delete hd[key];
+    await fetch('/api/profile', {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({health_data: hd}),
+    });
+    renderProfile();
+  } catch (e) { console.error(e); }
+}
+
 async function logExerciseEffort(date, name, effort, btn) {
   const row = btn.closest('tr');
   const wasActive = btn.classList.contains('effort-active');
@@ -1791,14 +1827,10 @@ async function saveHealthProfile() {
   const height = document.getElementById('p-height').value;
   const resting = document.getElementById('p-resting').value;
   const bp = document.getElementById('p-bp').value;
-  const meds = document.getElementById('p-meds').value;
-  const injuries = document.getElementById('p-injuries').value;
   if (gender) data.gender = gender;
   if (height) data.height_cm = parseInt(height);
   if (resting) data.resting_hr = parseInt(resting);
   if (bp) data.blood_pressure = bp;
-  if (meds) data.medications = meds;
-  if (injuries) data.injuries = injuries;
   try {
     const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
     if (!r.ok) { alert('Kunde inte spara'); return; }
@@ -1807,16 +1839,14 @@ async function saveHealthProfile() {
     const logData = {};
     if (bp) logData.blodtryck_log = {value: bp, date: today};
     if (resting) logData.vilopuls_log = {value: parseInt(resting), date: today};
-    if (height) logData.langd_log = {value: parseInt(height), date: today};
-    if (meds) logData.mediciner_log = {value: meds, date: today};
     if (Object.keys(logData).length > 0) {
-      // Merge as append-to-array via backend
       await fetch('/api/profile/health-log', {
         method: 'POST', headers: hdrs(),
         body: JSON.stringify(logData),
       });
     }
-    alert('Hälsodata sparad!');
+    alert('Mätvärden sparade!');
+    renderProfile();
   } catch (e) { alert('Fel: ' + e.message); }
 }
 
@@ -1855,29 +1885,32 @@ function renderHealthData(profile) {
     taDiv.textContent = `Trixas bedömning: ${smileys[ta.value] || '?'} (${ta.timestamp ? new Date(ta.timestamp).toLocaleDateString('sv') : ''})`;
   }
 
-  // Dynamic health_data (read-only list)
+  // Dynamic health_data (editable list)
   const container = document.getElementById('health-data-list');
-  const wrapper = document.getElementById('trixa-health-data');
   const INTERNAL_KEYS = new Set(['trixa_assessment', 'status_tags', 'session_ratings']);
   const entries = Object.entries(hd).filter(([k]) => !INTERNAL_KEYS.has(k));
   if (entries.length > 0) {
-    wrapper.style.display = 'block';
     container.innerHTML = entries.map(([k, v]) => {
       let val, dateStr = '';
-      if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+      const isLog = Array.isArray(v);
+      if (isLog) {
+        // Show latest value + history count
+        const latest = v[v.length - 1];
+        val = typeof latest === 'object' ? latest.value : latest;
+        dateStr = v.length > 1 ? ` <span style="opacity:0.5">(${v.length} mätningar)</span>` : '';
+        if (typeof latest === 'object' && latest.date) dateStr = ` <span style="opacity:0.5">(${latest.date})</span>` + dateStr;
+      } else if (typeof v === 'object' && v !== null) {
         val = v.value || JSON.stringify(v);
         if (v.noted_at) dateStr = ` <span style="opacity:0.5">(${v.noted_at})</span>`;
-      } else if (Array.isArray(v)) {
-        // Show array as readable list (e.g. history)
-        val = v.map(item => typeof item === 'object' ? `${item.value} (${item.date || ''})` : item).join(', ');
       } else {
         val = String(v);
       }
       const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      return `<div class="health-data-item"><span class="hd-key">${esc(label)}</span><span>${esc(String(val))}${dateStr}</span></div>`;
+      const delBtn = `<span class="tag-x" onclick="removeHealthDataEntry('${k}')" style="margin-left:0.3rem;cursor:pointer;opacity:0.4;font-size:0.7rem" title="Ta bort">✕</span>`;
+      return `<div class="health-data-item"><span class="hd-key">${esc(label)}</span><span>${esc(String(val))}${dateStr}${delBtn}</span></div>`;
     }).join('');
   } else {
-    wrapper.style.display = 'none';
+    container.innerHTML = '<span style="color:var(--text-dim);font-size:0.78rem">Inga data ännu — berätta för Trixa eller lägg till nedan.</span>';
   }
 }
 
