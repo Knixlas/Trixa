@@ -302,7 +302,7 @@ input:focus { border-color: var(--accent); }
 <!-- AUTH -->
 <div id="auth-view">
   <h1>Trixa</h1>
-  <p class="subtitle">Din personliga AI-tranare</p>
+  <p class="subtitle">Din personliga AI-tränare</p>
   <div class="auth-form">
     <div class="auth-tabs">
       <button class="active" onclick="showAuthTab('login')">Logga in</button>
@@ -312,13 +312,13 @@ input:focus { border-color: var(--accent); }
     <div id="auth-success" class="success-msg" style="display:none"></div>
     <div id="login-fields">
       <input type="email" id="login-email" placeholder="E-post">
-      <input type="password" id="login-pw" placeholder="Losenord">
+      <input type="password" id="login-pw" placeholder="Lösenord">
       <button class="btn" id="login-btn" onclick="doLogin()">Logga in</button>
     </div>
     <div id="signup-fields" style="display:none">
       <input type="text" id="signup-name" placeholder="Ditt namn">
       <input type="email" id="signup-email" placeholder="E-post">
-      <input type="password" id="signup-pw" placeholder="Losenord (minst 6 tecken)">
+      <input type="password" id="signup-pw" placeholder="Lösenord (minst 6 tecken)">
       <button class="btn" id="signup-btn" onclick="doSignup()">Skapa konto</button>
     </div>
   </div>
@@ -336,10 +336,10 @@ input:focus { border-color: var(--accent); }
     <div class="status-strip" id="status-strip"></div>
     <div id="tip-container"></div>
 
-    <!-- Nasta pass (OPEN by default) -->
+    <!-- Nästa pass (OPEN by default) -->
     <div class="section-card open" id="card-upcoming">
       <div class="section-header" onclick="toggleSection('card-upcoming')">
-        <h3>&#x1F3CB; Nasta pass</h3><span class="chevron">&#x25B6;</span>
+        <h3>&#x1F3CB; Nästa pass</h3><span class="chevron">&#x25B6;</span>
       </div>
       <div class="section-body" id="upcoming-body">
         <div class="plan-empty">Be Trixa om en veckoplan!</div>
@@ -354,10 +354,10 @@ input:focus { border-color: var(--accent); }
       <div class="section-body" id="plan-content"></div>
     </div>
 
-    <!-- Nasta styrkepass (collapsed) -->
+    <!-- Nästa styrkepass (collapsed) -->
     <div class="section-card" id="card-strength">
       <div class="section-header" onclick="toggleSection('card-strength')">
-        <h3>&#x1F4AA; Nasta styrkepass</h3><span class="chevron">&#x25B6;</span>
+        <h3>&#x1F4AA; Nästa styrkepass</h3><span class="chevron">&#x25B6;</span>
       </div>
       <div class="section-body" id="strength-body">
         <div style="color:var(--text-dim);font-size:0.85rem">Laddar...</div>
@@ -384,10 +384,10 @@ input:focus { border-color: var(--accent); }
       </div>
     </div>
 
-    <!-- Senaste traning (collapsed) -->
+    <!-- Senaste träning (collapsed) -->
     <div class="section-card" id="card-activities">
       <div class="section-header" onclick="toggleSection('card-activities')">
-        <h3>&#x1F3C3; Senaste traning</h3><span class="chevron">&#x25B6;</span>
+        <h3>&#x1F3C3; Senaste träning</h3><span class="chevron">&#x25B6;</span>
       </div>
       <div class="section-body" id="strava-activities"></div>
     </div>
@@ -414,7 +414,7 @@ input:focus { border-color: var(--accent); }
 
     <div class="profile-section" id="athlete-edit-section">
       <h3>Om dig</h3>
-      <div class="profile-input"><label>Erfarenhetsniva</label>
+      <div class="profile-input"><label>Erfarenhetsnivå</label>
         <select id="p-level" style="width:100%;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-size:0.9rem">
           <option value="">Valj...</option>
           <option value="beginner">Nyborjare</option>
@@ -423,14 +423,14 @@ input:focus { border-color: var(--accent); }
         </select>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-        <div class="profile-input"><label>Alder</label><input type="number" id="p-age" placeholder="46"></div>
+        <div class="profile-input"><label>Ålder</label><input type="number" id="p-age" placeholder="46"></div>
         <div class="profile-input"><label>Vikt (kg)</label><input type="number" id="p-weight" placeholder="75"></div>
-        <div class="profile-input"><label>Ar med traning</label><input type="number" id="p-years" placeholder="12"></div>
+        <div class="profile-input"><label>År med träning</label><input type="number" id="p-years" placeholder="12"></div>
         <div class="profile-input"><label>Ironman-starter</label><input type="number" id="p-im" placeholder="13"></div>
         <div class="profile-input"><label>Timmar/vecka</label><input type="number" id="p-hours" placeholder="10"></div>
       </div>
-      <div class="profile-input"><label>Nasta tavling</label><input type="text" id="p-race" placeholder="Ironman Kalmar, 15 aug 2026"></div>
-      <div class="profile-input"><label>Halsoanteckningar</label><input type="text" id="p-health" placeholder="T.ex. ont i handleden, Levaxin"></div>
+      <div class="profile-input"><label>Nästa tävling</label><input type="text" id="p-race" placeholder="Ironman Kalmar, 15 aug 2026"></div>
+      <div class="profile-input"><label>Hälsoanteckningar</label><input type="text" id="p-health" placeholder="T.ex. ont i handleden, Levaxin"></div>
       <button class="btn btn-sm" onclick="saveAthleteProfile()" style="margin-top:0.5rem">Spara profil</button>
     </div>
 
@@ -444,8 +444,8 @@ input:focus { border-color: var(--accent); }
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
         <div class="profile-input"><label>FTP (watt)</label><input type="number" id="z-ftp" placeholder="280"></div>
         <div class="profile-input"><label>CSS (/100m)</label><input type="text" id="z-css" placeholder="1:45"></div>
-        <div class="profile-input"><label>Troskelfart (/km)</label><input type="text" id="z-pace" placeholder="4:30"></div>
-        <div class="profile-input"><label>Troskelpuls</label><input type="number" id="z-thr" placeholder="165"></div>
+        <div class="profile-input"><label>Tröskelfart (/km)</label><input type="text" id="z-pace" placeholder="4:30"></div>
+        <div class="profile-input"><label>Tröskelpuls</label><input type="number" id="z-thr" placeholder="165"></div>
         <div class="profile-input"><label>Max puls</label><input type="number" id="z-max" placeholder="185"></div>
       </div>
       <button class="btn btn-sm" onclick="saveZones()" style="margin-top:0.5rem">Spara nyckeltal</button>
@@ -615,7 +615,7 @@ async function doSignup() {
   const pw = document.getElementById('signup-pw').value;
   if (!name || !email || !pw) return;
   if (pw.length < 6) {
-    document.getElementById('auth-error').textContent = 'Losenordet maste vara minst 6 tecken';
+    document.getElementById('auth-error').textContent = 'Lösenordet måste vara minst 6 tecken';
     document.getElementById('auth-error').style.display = 'block';
     return;
   }
@@ -721,7 +721,7 @@ async function fetchCoachBrief(refresh = false) {
     renderBrief(cachedBrief);
     return;
   }
-  tip.innerHTML = `<div class="tip-box"><div class="tip-label">Trixa tanker...</div><div class="tip-text" style="opacity:0.5">Analyserar din traning...</div></div>`;
+  tip.innerHTML = `<div class="tip-box"><div class="tip-label">Trixa tänker...</div><div class="tip-text" style="opacity:0.5">Analyserar din traning...</div></div>`;
   try {
     const url = '/api/coach/brief' + (refresh ? '?refresh=1' : '');
     const r = await fetch(url, {headers: hdrs()});
@@ -791,7 +791,7 @@ async function renderNextStrength() {
     html += `<div style="font-size:0.95rem;font-weight:700;margin-bottom:0.3rem">${esc(s.title)}</div>`;
     if (s.purpose) html += `<div style="font-size:0.75rem;color:var(--accent);margin-bottom:0.5rem;font-style:italic">${esc(s.purpose)}</div>`;
     if (s.exercises && s.exercises.length > 0) {
-      html += '<table class="strength-table"><thead><tr><th>Ovning</th><th>Detaljer</th></tr></thead><tbody>';
+      html += '<table class="strength-table"><thead><tr><th>Övning</th><th>Detaljer</th></tr></thead><tbody>';
       for (const ex of s.exercises) {
         let detail = '';
         if (ex.weights && ex.weights.length > 0) {
@@ -836,14 +836,14 @@ async function renderZones() {
     const data = await r.json();
     const z = data.zones;
     if (!z || (!z.ftp && !z.css_per_100m && !z.threshold_pace && !z.threshold_hr)) {
-      el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Fraga Trixa: "Berakna mina zoner" eller fyll i under Profil</div>';
+      el.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem">Fråga Trixa: "Beräkna mina zoner" eller fyll i under Profil</div>';
       return;
     }
     let html = '<div class="metrics-grid">';
     if (z.ftp) html += `<div class="metric-box"><div class="metric-label">FTP</div><div class="metric-value">${z.ftp}</div><div class="metric-unit">watt</div></div>`;
     if (z.css_per_100m) html += `<div class="metric-box"><div class="metric-label">CSS</div><div class="metric-value">${esc(z.css_per_100m)}</div><div class="metric-unit">/100m</div></div>`;
-    if (z.threshold_pace) html += `<div class="metric-box"><div class="metric-label">Troskelfart</div><div class="metric-value">${esc(z.threshold_pace)}</div><div class="metric-unit">/km</div></div>`;
-    if (z.threshold_hr) html += `<div class="metric-box"><div class="metric-label">Troskelpuls</div><div class="metric-value">${z.threshold_hr}</div><div class="metric-unit">bpm</div></div>`;
+    if (z.threshold_pace) html += `<div class="metric-box"><div class="metric-label">Tröskelfart</div><div class="metric-value">${esc(z.threshold_pace)}</div><div class="metric-unit">/km</div></div>`;
+    if (z.threshold_hr) html += `<div class="metric-box"><div class="metric-label">Tröskelpuls</div><div class="metric-value">${z.threshold_hr}</div><div class="metric-unit">bpm</div></div>`;
     if (z.max_hr) html += `<div class="metric-box"><div class="metric-label">Max puls</div><div class="metric-value">${z.max_hr}</div><div class="metric-unit">bpm</div></div>`;
     html += '</div>';
     el.innerHTML = html;
@@ -970,7 +970,7 @@ async function sendMessage() {
   const typing = document.createElement('div');
   typing.className = 'msg assistant';
   typing.style.opacity = '0.5';
-  typing.textContent = 'Trixa tanker...';
+  typing.textContent = 'Trixa tänker...';
   document.getElementById('chat-messages').appendChild(typing);
 
   try {
@@ -993,7 +993,7 @@ async function sendMessage() {
       } catch (e) {
         clearTimeout(timer);
         if (e.name === 'AbortError' && attempt < 2) {
-          typing.textContent = 'Trixa tanker fortfarande...';
+          typing.textContent = 'Trixa tänker fortfarande...';
           return chatFetch(attempt + 1);
         }
         throw e;
@@ -1053,7 +1053,7 @@ async function sendMessage() {
         await renderNextSession();
         await renderWeekPlan();
         await renderNextStrength();
-        appendMsg('assistant', null, null, '<div style="color:var(--accent);font-size:0.85rem">&#x1F4C5; Planen ar uppdaterad pa hemsidan!</div>');
+        appendMsg('assistant', null, null, '<div style="color:var(--accent);font-size:0.85rem">&#x1F4C5; Planen är uppdaterad på hemsidan!</div>');
         // Refresh Trixa säger to reflect new plan
         cachedBrief = null;
         fetchCoachBrief(true);
@@ -1063,7 +1063,7 @@ async function sendMessage() {
   } catch (e) {
     typing.remove();
     const errMsg = e.name === 'AbortError'
-      ? 'Trixa tog for lang tid pa sig. Forsok igen — kortare meddelanden gar snabbare.'
+      ? 'Trixa tog för lång tid på sig. Försök igen — kortare meddelanden går snabbare.'
       : 'Anslutningsfel. Kolla natet och forsok igen.';
     appendMsg('assistant', errMsg);
   }
@@ -1074,7 +1074,7 @@ function showZonesProposal(zones) {
   const c = document.getElementById('chat-messages');
   const div = document.createElement('div');
   div.className = 'msg assistant';
-  const labels = {ftp:'FTP', css_per_100m:'CSS', threshold_pace:'Troskelfart', threshold_hr:'Troskelpuls', max_hr:'Max puls'};
+  const labels = {ftp:'FTP', css_per_100m:'CSS', threshold_pace:'Tröskelfart', threshold_hr:'Tröskelpuls', max_hr:'Max puls'};
   const units = {ftp:'W', css_per_100m:'/100m', threshold_pace:'/km', threshold_hr:'bpm', max_hr:'bpm'};
   let rows = Object.entries(zones).map(([k,v]) => `${labels[k]||k}: <strong>${v}${units[k]||''}</strong>`).join('<br>');
   div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:0.7rem;margin-top:0.3rem">
@@ -1094,7 +1094,7 @@ async function applyZonesUpdate(zonesJson) {
   try {
     const r = await fetch('/api/athlete/zones', {method:'POST', headers:hdrs(), body:JSON.stringify(zones)});
     if (r.ok) {
-      appendMsg('assistant', 'Nyckeltal uppdaterade! Dina nya zoner ar aktiva.');
+      appendMsg('assistant', 'Nyckeltal uppdaterade! Dina nya zoner är aktiva.');
       renderZones();
     } else {
       appendMsg('assistant', 'Kunde inte uppdatera nyckeltal.');
@@ -1222,13 +1222,13 @@ async function syncStravaFull() {
       return;
     }
     const data = await r.json();
-    alert(`Klart! Laddade ner ${data.synced} aktiviteter (24 manader).`);
+    alert(`Klart! Laddade ner ${data.synced} aktiviteter (24 månader).`);
     await fetchStrava();
     renderStravaActivities();
     cachedBrief = null;
     fetchCoachBrief(true);
   } catch (e) { alert('Fel: ' + e.message); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = 'Ladda ner allt fran Strava'; } }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Ladda ner allt från Strava'; } }
 }
 
 async function disconnectStrava() {
@@ -1245,7 +1245,7 @@ function renderStravaProfile() {
   const el = document.getElementById('strava-status');
   if (stravaData.connected) {
     el.innerHTML = `<div class="profile-row"><span class="label">Status</span><span style="color:#2ecc71">Kopplad</span></div>
-      <button class="strava-btn" onclick="syncStravaFull()" style="margin-top:0.5rem">Ladda ner allt fran Strava</button>
+      <button class="strava-btn" onclick="syncStravaFull()" style="margin-top:0.5rem">Ladda ner allt från Strava</button>
       <button class="strava-btn disconnect" onclick="disconnectStrava()" style="margin-top:0.4rem">Koppla fran</button>`;
   } else {
     el.innerHTML = `<button class="strava-btn" onclick="connectStrava()">Koppla Strava</button>`;
@@ -1272,8 +1272,8 @@ async function renderProfile() {
           Obegransade meddelanden, bilagor, traningspass till klockan
         </div>
         <div style="display:flex;gap:0.5rem">
-          <button class="btn btn-sm" onclick="startCheckout('monthly')" style="flex:1">99 kr/man</button>
-          <button class="btn btn-sm" onclick="startCheckout('yearly')" style="flex:1;background:var(--accent2)">799 kr/ar</button>
+          <button class="btn btn-sm" onclick="startCheckout('monthly')" style="flex:1">99 kr/mån</button>
+          <button class="btn btn-sm" onclick="startCheckout('yearly')" style="flex:1;background:var(--accent2)">799 kr/år</button>
         </div>
       </div>`;
   }
