@@ -1273,6 +1273,29 @@ async def coach_brief(request: Request, refresh: int = 0, domina: int = 0):
     today_str = now.strftime("%Y-%m-%d")
     yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
 
+    # Check exercise_logs for completed strength sessions today
+    strength_done_today = ""
+    try:
+        admin = db.get_admin_client()
+        ex_logs = (
+            admin.table("exercise_logs")
+            .select("exercise_name, effort")
+            .eq("user_id", uid)
+            .eq("session_date", today_str)
+            .execute()
+        )
+        if ex_logs.data:
+            done = [e for e in ex_logs.data if e["effort"] > 0]
+            skipped = [e for e in ex_logs.data if e["effort"] == -1]
+            if done:
+                effort_avg = sum(e["effort"] for e in done) / len(done)
+                effort_label = "lätt" if effort_avg < 1.5 else "medel" if effort_avg < 2.5 else "tungt" if effort_avg < 3.5 else "max"
+                strength_done_today = f"Styrkepass genomfört ({len(done)} övningar, känsla: {effort_label})"
+                if skipped:
+                    strength_done_today += f", {len(skipped)} övningar skippade"
+    except Exception:
+        pass
+
     today_activities = []
     yesterday_activity = ""
     for a in (activities or []):
@@ -1292,6 +1315,8 @@ async def coach_brief(request: Request, refresh: int = 0, domina: int = 0):
             if a.get("avg_hr"): parts.append(f"puls {a['avg_hr']}")
             if a.get("rating"): parts.append(f"njutningsbetyg {a['rating']}/5")
             yesterday_activity = ", ".join(parts)
+    if strength_done_today:
+        today_activities.append(strength_done_today)
     today_done = " | ".join(today_activities) if today_activities else ""
 
     api_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
