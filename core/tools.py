@@ -168,17 +168,25 @@ WORKOUT_TOOL = {
 
 
 def get_plan_tool() -> dict:
-    """Build plan tool with today's date so Trixa knows where she is."""
-    today = datetime.now().strftime("%Y-%m-%d")
-    weekday = WEEKDAYS_SV[datetime.now().weekday()]
+    """Build plan tool with today's date and date table so Trixa never miscalculates."""
+    from datetime import timedelta
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    weekday = WEEKDAYS_SV[now.weekday()]
+    # Build compact date lookup for the tool description
+    date_map = []
+    for i in range(14):
+        d = now + timedelta(days=i)
+        dn = WEEKDAYS_SV[d.weekday()][:3]
+        date_map.append(f"{dn} {d.day}/{d.month}={d.strftime('%Y-%m-%d')}")
+    date_ref = ", ".join(date_map)
     return {
         "name": "plan_training_sessions",
         "description": (
             f"Spara traningspass i atletens plan. Idag ar {weekday} {today}. "
-            "KRITISKT: Datum i sessions MASTE vara exakt YYYY-MM-DD och matcha "
-            "EXAKT de dagar du namner i texten. Om du sager 'tisdag 25/3' MASTE date vara "
-            f"'2026-03-25' (aret ar {datetime.now().year}). "
-            "RAKNA ALDRIG ut veckodagar sjalv — anvand ALLTID datumreferenstabellen i systemprompten. "
+            f"DATUMLISTA (anvand DENNA, rakna aldrig sjalv): {date_ref}. "
+            "KRITISKT: date-faltet i varje session MASTE vara exakt fran listan ovan. "
+            "Kontrollera VARJE datum mot listan innan du skickar. "
             "Du MASTE anropa detta verktyg varje gang en plan godkanns eller andras. "
             "Vid andring: skicka HELA den uppdaterade planen (alla dagar kommande 7-10 dagar), "
             "inte bara det andrade passet. Inkludera vilopass (sport='Vila', title='Vila'). "
