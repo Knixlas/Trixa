@@ -200,6 +200,12 @@ input:focus { border-color: var(--accent); }
 .dot-status-future { background: #333; }
 .week-info { min-width: 0; }
 .week-planned { color: var(--text); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toggle-switch { position: relative; width: 48px; height: 26px; display: inline-block; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; inset: 0; background: #333; border-radius: 26px; cursor: pointer; transition: 0.3s; }
+.toggle-slider:before { content: ''; position: absolute; height: 20px; width: 20px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.3s; }
+.toggle-switch input:checked + .toggle-slider { background: #e74c3c; }
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); }
 .status-tag { display: inline-flex; align-items: center; gap: 0.3rem; background: var(--surface); border: 1px solid var(--accent); border-radius: 20px; padding: 0.3rem 0.7rem; font-size: 0.8rem; color: var(--text); }
 .status-tag .tag-x { cursor: pointer; opacity: 0.5; font-size: 0.7rem; padding: 2px; }
 .status-tag .tag-x:hover { opacity: 1; }
@@ -491,6 +497,20 @@ input:focus { border-color: var(--accent); }
         </div>
         <div class="profile-input"><label>Nästa tävling</label><input type="text" id="p-race" placeholder="Ironman Kalmar, 15 aug 2026"></div>
         <button class="btn btn-sm" onclick="saveAthleteProfile()" style="margin-top:0.5rem">Spara</button>
+      </div>
+
+      <!-- DominaTrixa toggle -->
+      <div class="profile-section">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <h3 style="margin:0">DominaTrixa</h3>
+            <p style="font-size:0.72rem;color:var(--text-dim);margin:0.2rem 0 0">Hånfull coach med glimten i ögat</p>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="domina-toggle" onchange="toggleDomina(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
 
       <!-- Strava status -->
@@ -1231,6 +1251,7 @@ async function sendMessage() {
     if (images.length) {
       body.images = images.map(img => ({base64: img.base64, media_type: img.mediaType}));
     }
+    if (isDomina()) body.domina = true;
 
     // Fetch with 90s timeout + auto-retry once
     async function chatFetch(attempt) {
@@ -1587,6 +1608,12 @@ async function saveAthleteProfile() {
   } catch (e) { alert('Fel: ' + e.message); }
 }
 
+// ── DominaTrixa toggle ──
+function toggleDomina(on) {
+  localStorage.setItem('trixa_domina', on ? '1' : '0');
+}
+function isDomina() { return localStorage.getItem('trixa_domina') === '1'; }
+
 // ── Status Tags (temporary conditions) ──
 function renderStatusTags(profile) {
   const hd = profile.health_data || {};
@@ -1712,6 +1739,8 @@ async function setSelfAssessment(val) {
 }
 
 function renderHealthData(profile) {
+  // DominaTrixa toggle state
+  document.getElementById('domina-toggle').checked = isDomina();
   // Status tags
   renderStatusTags(profile);
   // Fixed fields

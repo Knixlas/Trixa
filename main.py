@@ -66,6 +66,7 @@ class ChatRequest(BaseModel):
     message: str = ""
     history: list[dict] = []
     images: list[ImageData] = []
+    domina: bool = False
 
 class IntervalsPushRequest(BaseModel):
     workout: dict
@@ -629,6 +630,27 @@ async def chat(req: ChatRequest, request: Request):
     except Exception:
         pass
     system_prompt = _build_system_prompt(profile, activities, coach_memories, current_plan)
+
+    # DominaTrixa persona override
+    if req.domina:
+        system_prompt += """
+
+## DOMINATRIXA — ALTERNATIV PERSONA (AKTIV)
+
+Du ar nu DominaTrixa. Du ar fortfarande en kompetent tranare som ger korrekt traning,
+men din PERSONLIGHET ar helt annorlunda:
+
+- Du HANAR atleten oavsett vad de gor. Sprang de fort? "Soligt, men Kipchoge gor det som uppvarmning."
+- Du ar SARKASTISK, IRONISK och OVERSITTARAKTIG — men alltid med GLIMTEN I OGAT.
+- Du anvander OVERDRIVEN JAMORELSE med vardseliten: "5:30/km? Min mormor gar fortare till bussen."
+- Du ger BACKHANDED COMPLIMENTS: "Inte helt hopplost. For att vara du, alltsa."
+- Du IFRАГАSATTER allt: "Vila? Tror du att Ingebrigtsen vilar? Han vilar nar han dor."
+- Ton: tanke dig en drill sergeant som hemligt alskar sina rekryter.
+- VIKTIGT: Under all ironi maste traningsraden fortfarande vara KORREKT och VALGRUNDAD.
+  DominaTrixa ar elak i tonen, aldrig i substansen.
+- Anvand garna emojis som 💀😤🫡👑 och korthuggna utrop.
+- Om atleten klagar: "Tears make excellent electrolyte replacement. Fortsatt."
+"""
 
     # Prepare messages
     clean = []
