@@ -200,6 +200,9 @@ input:focus { border-color: var(--accent); }
 .dot-status-future { background: #333; }
 .week-info { min-width: 0; }
 .week-planned { color: var(--text); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.swim-set-list { margin: 0.3rem 0 0.5rem; }
+.swim-set-row { font-size: 0.82rem; color: var(--text-dim); padding: 0.2rem 0; padding-left: 0.5rem; border-left: 2px solid #333; }
+.swim-set-row.swim-main { color: var(--text); font-weight: 600; border-left-color: var(--accent); }
 .week-session { color: var(--text); font-size: 0.78rem; padding: 1px 0; border-left: 2px solid var(--accent); padding-left: 0.4rem; margin-bottom: 2px; }
 .week-actual { color: #2ecc71; font-size: 0.7rem; margin-top: 1px; }
 .week-actual.missed { color: #e74c3c; }
@@ -923,9 +926,26 @@ async function renderNextSession() {
       const label = i < 2 ? LABELS[i] : d.day;
       let html = `<div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem">${label}</div>`;
       for (const s of sessions) {
+        const isSim = (s.sport || '').toLowerCase().includes('sim') || (s.title || '').toLowerCase().includes('sim');
         html += `<div style="font-size:1rem;font-weight:700;margin-bottom:0.2rem">${esc(s.title)}</div>`;
-        if (s.details) html += `<div style="font-size:0.8rem;color:var(--text-dim);line-height:1.5;margin-bottom:0.3rem">${esc(s.details)}</div>`;
+        if (s.details) {
+          if (isSim) {
+            // Format swim session: split on comma/period/semicolon for readable rows
+            const parts = s.details.split(/[,;.]+/).map(p => p.trim()).filter(Boolean);
+            html += '<div class="swim-set-list">';
+            for (const part of parts) {
+              const isMain = /\d+x\d+/i.test(part) || /intervall/i.test(part);
+              html += `<div class="swim-set-row${isMain ? ' swim-main' : ''}">${esc(part)}</div>`;
+            }
+            html += '</div>';
+          } else {
+            html += `<div style="font-size:0.8rem;color:var(--text-dim);line-height:1.5;margin-bottom:0.3rem">${esc(s.details)}</div>`;
+          }
+        }
         if (s.purpose) html += `<div style="font-size:0.75rem;color:var(--accent);margin-bottom:0.5rem;font-style:italic">${esc(s.purpose)}</div>`;
+        if (isSim && s.details) {
+          html += `<button class="btn btn-sm" onclick="downloadSwimPdf('${esc(s.title)}','${esc(s.details).replace(/'/g, "\\'")}','${esc(s.purpose || '')}')" style="font-size:0.75rem;padding:0.3rem 0.8rem;margin-bottom:0.5rem">&#x1F4C4; Ladda ner PDF</button>`;
+        }
       }
       el.innerHTML = html;
       return;
@@ -1533,6 +1553,29 @@ async function saveAthleteProfile() {
     const r = await fetch('/api/profile', {method:'POST', headers:hdrs(), body:JSON.stringify(data)});
     alert(r.ok ? 'Profil sparad!' : 'Kunde inte spara');
   } catch (e) { alert('Fel: ' + e.message); }
+}
+
+function downloadSwimPdf(title, details, purpose) {
+  const parts = details.split(/[,;.]+/).map(p => p.trim()).filter(Boolean);
+  const rows = parts.map(part => {
+    const isMain = /\d+x\d+/i.test(part) || /intervall/i.test(part);
+    return `<tr><td style="padding:10px 15px;font-size:${isMain ? '22pt' : '18pt'};${isMain ? 'font-weight:bold;background:#e8f4fd;' : ''}">${part}</td></tr>`;
+  }).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>@page{size:A4;margin:2cm}body{font-family:Arial,sans-serif;color:#222}
+    h1{font-size:28pt;margin-bottom:5px}h2{font-size:16pt;color:#666;font-style:italic;margin-bottom:30px}
+    table{width:100%;border-collapse:collapse}tr{border-bottom:1px solid #ddd}
+    .footer{position:fixed;bottom:2cm;font-size:12pt;color:#999}</style>
+    </head><body>
+    <h1>${title}</h1>
+    ${purpose ? `<h2>${purpose}</h2>` : ''}
+    <table>${rows}</table>
+    <div class="footer">Trixa — din personliga AI-tränare</div>
+    <script>window.onload=()=>{window.print()}</script>
+    </body></html>`;
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 function showProfileTab(tab) {
