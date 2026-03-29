@@ -542,9 +542,10 @@ input:focus { border-color: var(--accent); }
         <div style="margin-top:0.5rem">
           <label style="display:block;font-size:0.8rem;color:var(--text-dim);margin-bottom:0.3rem">Kommande tävlingar</label>
           <div id="race-list"></div>
-          <div style="display:flex;gap:0.3rem;margin-top:0.3rem">
-            <input type="text" id="race-name" placeholder="Ironman Kalmar, 15 aug 2026" style="flex:3;font-size:0.8rem;padding:0.4rem 0.6rem">
-            <select id="race-prio" style="flex:1;font-size:0.8rem;padding:0.4rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text)">
+          <div style="display:flex;gap:0.3rem;margin-top:0.3rem;flex-wrap:wrap">
+            <input type="text" id="race-name" placeholder="Ironman Kalmar" style="flex:3;min-width:120px;font-size:0.8rem;padding:0.4rem 0.6rem">
+            <input type="date" id="race-date" style="flex:1;min-width:110px;font-size:0.8rem;padding:0.4rem 0.6rem">
+            <select id="race-prio" style="width:50px;font-size:0.8rem;padding:0.4rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text)">
               <option value="A">A</option>
               <option value="B">B</option>
               <option value="C">C</option>
@@ -1852,17 +1853,23 @@ function renderRaces(profile) {
   const races = hd.races || [];
   if (!races.length) { el.innerHTML = ''; return; }
   const prioColors = {A: '#e74c3c', B: '#f5a623', C: '#2ecc71'};
-  el.innerHTML = races.map((r, i) =>
-    `<div style="display:flex;align-items:center;gap:0.4rem;padding:0.25rem 0;font-size:0.82rem">
+  // Sort by date
+  const sorted = [...races].sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+  el.innerHTML = sorted.map((r) => {
+    const origIdx = races.indexOf(r);
+    const dateStr = r.date ? new Date(r.date).toLocaleDateString('sv', {day:'numeric', month:'short', year:'numeric'}) : '';
+    return `<div style="display:flex;align-items:center;gap:0.4rem;padding:0.25rem 0;font-size:0.82rem">
       <span style="background:${prioColors[r.prio] || '#666'};color:#fff;border-radius:4px;padding:1px 6px;font-size:0.7rem;font-weight:700">${r.prio}</span>
       <span style="flex:1">${esc(r.name)}</span>
-      <span class="tag-x" onclick="removeRace(${i})" style="cursor:pointer;opacity:0.4;font-size:0.7rem">✕</span>
-    </div>`
-  ).join('');
+      ${dateStr ? `<span style="color:var(--text-dim);font-size:0.75rem">${dateStr}</span>` : ''}
+      <span class="tag-x" onclick="removeRace(${origIdx})" style="cursor:pointer;opacity:0.4;font-size:0.7rem">✕</span>
+    </div>`;
+  }).join('');
 }
 
 async function addRace() {
   const name = document.getElementById('race-name').value.trim();
+  const date = document.getElementById('race-date').value;
   const prio = document.getElementById('race-prio').value;
   if (!name) return;
   document.getElementById('race-name').value = '';
@@ -1871,7 +1878,7 @@ async function addRace() {
     const d = await r.json();
     const hd = d.profile?.health_data || {};
     const races = hd.races || [];
-    races.push({name, prio});
+    races.push({name, date: date || '', prio});
     await fetch('/api/profile/health-data', {method:'POST', headers:hdrs(), body:JSON.stringify({races})});
     await renderProfile();
   } catch (e) { console.error(e); }
