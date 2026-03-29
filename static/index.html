@@ -373,6 +373,9 @@ input:focus { border-color: var(--accent); }
         <h3>&#x1F4C5; Veckoplan</h3><span class="chevron">&#x25B6;</span>
       </div>
       <div class="section-body" id="plan-content"></div>
+      <div id="cal-subscribe" style="display:none;padding:0.5rem 1rem 0.8rem">
+        <button class="btn btn-sm" onclick="subscribeCalendar()" style="width:100%;font-size:0.8rem;padding:0.5rem">&#x1F4C5; Lägg till i kalender</button>
+      </div>
     </div>
 
     <!-- Nästa styrkepass (collapsed) -->
@@ -986,6 +989,36 @@ async function renderZones() {
   }
 }
 
+async function subscribeCalendar() {
+  try {
+    const r = await fetch('/api/calendar/token', {headers: hdrs()});
+    if (!r.ok) throw new Error('Kunde inte hämta kalender-URL');
+    const data = await r.json();
+    // Try webcal:// protocol first (works on iOS/macOS natively)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isMac = /Macintosh/.test(navigator.userAgent);
+    if (isIOS || isMac) {
+      window.location.href = data.webcal;
+    } else {
+      // Show URL for manual copy
+      const ok = confirm(
+        'Kopiera denna URL och lägg till som "prenumeration" i din kalender-app:\n\n' +
+        data.url + '\n\nKlicka OK för att kopiera till urklipp.'
+      );
+      if (ok) {
+        try {
+          await navigator.clipboard.writeText(data.url);
+          alert('URL kopierad! Klistra in den i din kalender-app under "Lägg till prenumeration" eller "Subscribe to calendar".');
+        } catch {
+          prompt('Kopiera denna URL:', data.url);
+        }
+      }
+    }
+  } catch (e) {
+    alert('Fel: ' + e.message);
+  }
+}
+
 async function renderWeekPlan() {
   const el = document.getElementById('plan-content');
   try {
@@ -1017,6 +1050,7 @@ async function renderWeekPlan() {
     }
     html += '</div>';
     el.innerHTML = html;
+    if (data.has_plan) document.getElementById('cal-subscribe').style.display = 'block';
   } catch {
     // Fallback to chat-based plan
     const planMsg = [...chatHistory].reverse().find(m =>

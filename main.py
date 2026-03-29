@@ -938,6 +938,143 @@ async def next_strength(request: Request):
     return {"session": None}
 
 
+# ── Calendar Feed ────────────────────────────────────────────────
+
+import hmac, hashlib
+
+CAL_SECRET = os.environ.get("CALENDAR_SECRET", os.environ.get("STRAVA_STATE_SECRET", "trixa-cal-default"))
+
+
+def _make_cal_token(user_id: str) -> str:
+    """Generate HMAC-based calendar token from user_id."""
+    return hmac.new(CAL_SECRET.encode(), user_id.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def _verify_cal_token(token: str, user_id: str) -> bool:
+    return hmac.compare_digest(token, _make_cal_token(user_id))
+
+
+@app.get("/api/calendar/token")
+async def get_calendar_token(request: Request):
+    """Return the user's calendar subscription URL."""
+    uid, token = _get_auth(request)
+    cal_token = _make_cal_token(uid)
+    base_url = os.environ.get("SITE_URL", "https://trixa.up.railway.app")
+    return {
+        "url": f"{base_url}/api/calendar/{uid}/{cal_token}/trixa.ics",
+        "webcal": f"webcal://{base_url.replace('https://', '').replace('http://', '')}/api/calendar/{uid}/{cal_token}/trixa.ics",
+    }
+
+
+@app.get("/api/calendar/{user_id}/{cal_token}/trixa.ics")
+async def calendar_feed(user_id: str, cal_token: str):
+    """Public iCal feed — no auth headers needed, validated by HMAC token."""
+    if not _verify_cal_token(cal_token, user_id):
+        raise HTTPException(403, "Invalid calendar token")
+
+    # Use admin client since we don't have a user access token
+    admin = db.get_admin_client()
+    from_date = datetime.now().strftime("%Y-%m-%d")
+    to_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    result = (
+        admin.table("planned_sessions")
+        .select("*")
+        .eq("user_id", user_id)
+        .gte("date", from_date)
+        .lte("date", to_date)
+        .order("date")
+        .execute()
+    )
+    sessions = result.data or []
+
+    # Build iCal
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Trixa//Trixa Coach//SV",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "X-WR-CALNAME:Trixa Träning",
+        "X-WR-TIMEZONE:Europe/Stockholm",
+    ]
+
+    for s in sessions:
+        d = s.get("date", "")
+        title = s.get("title", "Träningspass")
+        sport = s.get("sport", "")
+        details = s.get("details", "")
+        purpose = s.get("purpose", "")
+        duration = s.get("duration_min", 60)
+        exercises = s.get("exercises")
+
+        # Build description
+        desc_parts = []
+        if purpose:
+            desc_parts.append(f"Syfte: {purpose}")
+        if details:
+            desc_parts.append(details)
+        if exercises and isinstance(exercises, list):
+            ex_lines = []
+            for ex in exercises:
+                name = ex.get("name", "?")
+                sets = ex.get("sets", "")
+                reps = ex.get("reps", "")
+                wf = ex.get("weight_from")
+                weights = ex.get("weights")
+                if weights:
+                    parts = []
+                    rps = ex.get("reps_per_set", [])
+                    for i, w in enumerate(weights):
+                        r = rps[i] if i < len(rps) else reps
+                        parts.append(f"{w}kg x{r}" if r else f"{w}kg")
+                    ex_lines.append(f"  {name}: {' / '.join(parts)}")
+                elif sets and reps:
+                    w = f" — {wf}kg" if wf else ""
+                    ex_lines.append(f"  {name}: {sets}x{reps}{w}")
+                else:
+                    ex_lines.append(f"  {name}")
+            if ex_lines:
+                desc_parts.append("Övningar:\\n" + "\\n".join(ex_lines))
+
+        description = "\\n\\n".join(desc_parts).replace("\n", "\\n")
+
+        # Parse date and create event
+        try:
+            dt = datetime.strptime(d, "%Y-%m-%d")
+        except Exception:
+            continue
+
+        # Default start time: 07:00 for morning sessions
+        start = dt.replace(hour=7, minute=0)
+        end = start + timedelta(minutes=int(duration) if duration else 60)
+        uid_str = f"trixa-{user_id[:8]}-{d}-{sport}@trixa.app"
+
+        lines.extend([
+            "BEGIN:VEVENT",
+            f"UID:{uid_str}",
+            f"DTSTART:{start.strftime('%Y%m%dT%H%M%S')}",
+            f"DTEND:{end.strftime('%Y%m%dT%H%M%S')}",
+            f"SUMMARY:{title}",
+            f"DESCRIPTION:{description}",
+            f"CATEGORIES:{sport.upper() if sport else 'TRAINING'}",
+            "STATUS:CONFIRMED",
+            f"DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%S')}Z",
+            "END:VEVENT",
+        ])
+
+    lines.append("END:VCALENDAR")
+
+    from fastapi.responses import Response
+    return Response(
+        content="\r\n".join(lines),
+        media_type="text/calendar; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=trixa.ics",
+            "Cache-Control": "no-cache, must-revalidate",
+        },
+    )
+
+
 # ── Coach Brief (for dashboard) ──────────────────────────────────
 
 @app.get("/api/coach/brief")
