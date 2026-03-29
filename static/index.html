@@ -1893,9 +1893,21 @@ function renderHealthData(profile) {
   }
 
   // All health data in one unified list
+  // Merge legacy profile fields into health_data view
   const container = document.getElementById('health-data-list');
   const INTERNAL_KEYS = new Set(['trixa_assessment', 'status_tags', 'session_ratings']);
-  const entries = Object.entries(hd).filter(([k]) => !INTERNAL_KEYS.has(k));
+  const legacy = {};
+  if (profile.gender) legacy.kön = {value: profile.gender, noted_at: '', pinned: true};
+  if (profile.height_cm) legacy.längd = {value: profile.height_cm + ' cm', noted_at: '', pinned: true};
+  if (profile.resting_hr) legacy.vilopuls = {value: profile.resting_hr + ' bpm', noted_at: '', pinned: true};
+  if (profile.weight_kg) legacy.vikt = {value: profile.weight_kg + ' kg', noted_at: '', pinned: true};
+  if (profile.blood_pressure) legacy.blodtryck = {value: profile.blood_pressure, noted_at: ''};
+  if (profile.medications) legacy.mediciner = {value: profile.medications, noted_at: ''};
+  if (profile.injuries) legacy.skador = {value: profile.injuries, noted_at: ''};
+  if (profile.health_notes) legacy.hälsoanteckningar = {value: profile.health_notes, noted_at: ''};
+  // health_data entries override legacy if same key exists
+  const merged = {...legacy, ...hd};
+  const entries = Object.entries(merged).filter(([k]) => !INTERNAL_KEYS.has(k));
 
   // Sort: pinned (trackable) first, then regular
   const pinned = entries.filter(([k, v]) => typeof v === 'object' && v !== null && v.pinned);
