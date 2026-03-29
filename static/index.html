@@ -1707,7 +1707,7 @@ function downloadSwimPdf(title, details, purpose) {
     ${purpose ? `<h2>${purpose}</h2>` : ''}
     <table>${rows}</table>
     <div class="footer">Trixa — din personliga AI-tränare</div>
-    <script>window.onload=()=>{window.print()}</script>
+    <scr` + `ipt>window.onload=()=>{window.print()}<\/scr` + `ipt>
     </body></html>`;
   const w = window.open('', '_blank');
   w.document.write(html);
