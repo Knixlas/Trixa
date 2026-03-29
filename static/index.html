@@ -469,48 +469,13 @@ input:focus { border-color: var(--accent); }
 
     <!-- Sub-tabs -->
     <div class="profile-subtabs">
-      <button class="active" onclick="showProfileTab('overview')">Översikt</button>
-      <button onclick="showProfileTab('details')">Detaljer</button>
+      <button class="active" onclick="showProfileTab('details')">Min data</button>
+      <button onclick="showProfileTab('overview')">Konto</button>
     </div>
 
-    <!-- ═══ ÖVERSIKT ═══ -->
-    <div id="profile-overview">
+    <!-- ═══ KONTO (was Översikt) ═══ -->
+    <div id="profile-overview" style="display:none">
       <div class="profile-section" id="profile-info"></div>
-
-      <!-- Formbedömning -->
-      <div class="profile-section">
-        <h3>Hur mår du?</h3>
-        <div style="display:flex;gap:0.3rem;margin-bottom:0.3rem">
-          <div id="self-assessment" style="display:flex;gap:0.3rem">
-            <button class="smiley-btn" data-val="1" onclick="setSelfAssessment(1)">&#128555;</button>
-            <button class="smiley-btn" data-val="2" onclick="setSelfAssessment(2)">&#128543;</button>
-            <button class="smiley-btn" data-val="3" onclick="setSelfAssessment(3)">&#128528;</button>
-            <button class="smiley-btn" data-val="4" onclick="setSelfAssessment(4)">&#128578;</button>
-            <button class="smiley-btn" data-val="5" onclick="setSelfAssessment(5)">&#128516;</button>
-          </div>
-        </div>
-        <div id="trixa-assessment" style="font-size:0.78rem;color:var(--text-dim)"></div>
-      </div>
-
-      <!-- Om dig (essentials only) -->
-      <div class="profile-section" id="athlete-edit-section">
-        <h3>Om dig</h3>
-        <div class="profile-input"><label>Erfarenhetsnivå</label>
-          <select id="p-level" style="width:100%;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-size:0.9rem">
-            <option value="">Välj...</option>
-            <option value="beginner">Nybörjare</option>
-            <option value="intermediate">Motionär</option>
-            <option value="advanced">Avancerad</option>
-          </select>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-          <div class="profile-input"><label>Ålder</label><input type="number" id="p-age" placeholder="46"></div>
-          <div class="profile-input"><label>Vikt (kg)</label><input type="number" id="p-weight" placeholder="75"></div>
-          <div class="profile-input"><label>Timmar/vecka</label><input type="number" id="p-hours" placeholder="10"></div>
-        </div>
-        <div class="profile-input"><label>Nästa tävling</label><input type="text" id="p-race" placeholder="Ironman Kalmar, 15 aug 2026"></div>
-        <button class="btn btn-sm" onclick="saveAthleteProfile()" style="margin-top:0.5rem">Spara</button>
-      </div>
 
       <!-- DominaTrixa toggle -->
       <div class="profile-section">
@@ -541,8 +506,43 @@ input:focus { border-color: var(--accent); }
       </div>
     </div>
 
-    <!-- ═══ DETALJER ═══ -->
-    <div id="profile-details" style="display:none">
+    <!-- ═══ DETALJER (default) ═══ -->
+    <div id="profile-details">
+
+      <!-- Formbedömning -->
+      <div class="profile-section">
+        <h3>Hur mår du?</h3>
+        <div style="display:flex;gap:0.3rem;margin-bottom:0.3rem">
+          <div id="self-assessment" style="display:flex;gap:0.3rem">
+            <button class="smiley-btn" data-val="1" onclick="setSelfAssessment(1)">&#128555;</button>
+            <button class="smiley-btn" data-val="2" onclick="setSelfAssessment(2)">&#128543;</button>
+            <button class="smiley-btn" data-val="3" onclick="setSelfAssessment(3)">&#128528;</button>
+            <button class="smiley-btn" data-val="4" onclick="setSelfAssessment(4)">&#128578;</button>
+            <button class="smiley-btn" data-val="5" onclick="setSelfAssessment(5)">&#128516;</button>
+          </div>
+        </div>
+        <div id="trixa-assessment" style="font-size:0.78rem;color:var(--text-dim)"></div>
+      </div>
+
+      <!-- Om dig -->
+      <div class="profile-section" id="athlete-edit-section">
+        <h3>Om dig</h3>
+        <div class="profile-input"><label>Erfarenhetsnivå</label>
+          <select id="p-level" style="width:100%;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid #2a2a3a;border-radius:8px;color:var(--text);font-size:0.9rem">
+            <option value="">Välj...</option>
+            <option value="beginner">Nybörjare</option>
+            <option value="intermediate">Motionär</option>
+            <option value="advanced">Avancerad</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          <div class="profile-input"><label>Ålder</label><input type="number" id="p-age" placeholder="46"></div>
+          <div class="profile-input"><label>Vikt (kg)</label><input type="number" id="p-weight" placeholder="75"></div>
+          <div class="profile-input"><label>Timmar/vecka</label><input type="number" id="p-hours" placeholder="10"></div>
+        </div>
+        <div class="profile-input"><label>Nästa tävling</label><input type="text" id="p-race" placeholder="Ironman Kalmar, 15 aug 2026"></div>
+        <button class="btn btn-sm" onclick="saveAthleteProfile()" style="margin-top:0.5rem">Spara</button>
+      </div>
 
       <!-- Status-bubblor (tillfälliga tillstånd) -->
       <div class="profile-section" id="status-tags-section">
@@ -1854,10 +1854,10 @@ function downloadSwimPdf(title, details, purpose) {
 
 function showProfileTab(tab) {
   document.querySelectorAll('.profile-subtabs button').forEach(b => b.classList.remove('active'));
-  document.getElementById('profile-overview').style.display = tab === 'overview' ? 'block' : 'none';
   document.getElementById('profile-details').style.display = tab === 'details' ? 'block' : 'none';
+  document.getElementById('profile-overview').style.display = tab === 'overview' ? 'block' : 'none';
   const btns = document.querySelectorAll('.profile-subtabs button');
-  btns[tab === 'overview' ? 0 : 1].classList.add('active');
+  btns[tab === 'details' ? 0 : 1].classList.add('active');
 }
 
 // saveHealthProfile removed — all health data is now managed via
@@ -1871,7 +1871,8 @@ async function setSelfAssessment(val) {
 }
 
 function renderHealthData(profile) {
-  // DominaTrixa toggle state (may not exist if overview not rendered yet)
+  try {
+  // DominaTrixa toggle state
   const dominaEl = document.getElementById('domina-toggle');
   if (dominaEl) dominaEl.checked = isDomina();
   // Status tags
@@ -1887,7 +1888,7 @@ function renderHealthData(profile) {
   const hd = profile.health_data || {};
   const ta = hd.trixa_assessment;
   const taDiv = document.getElementById('trixa-assessment');
-  if (ta) {
+  if (ta && taDiv) {
     const smileys = ['', '\u{1F62B}', '\u{1F61F}', '\u{1F610}', '\u{1F642}', '\u{1F604}'];
     taDiv.textContent = `Trixas bedömning: ${smileys[ta.value] || '?'} (${ta.timestamp ? new Date(ta.timestamp).toLocaleDateString('sv') : ''})`;
   }
@@ -1951,6 +1952,7 @@ function renderHealthData(profile) {
   } else {
     container.innerHTML = '<span style="color:var(--text-dim);font-size:0.78rem">Inga data ännu — berätta för Trixa eller lägg till nedan.</span>';
   }
+  } catch (e) { console.error('renderHealthData error:', e); }
 }
 
 async function saveZones() {
