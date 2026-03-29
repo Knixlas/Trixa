@@ -1741,29 +1741,22 @@ async function toggleExerciseDone(date, name, btn) {
 async function addHealthDataEntry() {
   const keyInput = document.getElementById('hd-new-key');
   const valInput = document.getElementById('hd-new-val');
-  const key = keyInput.value.trim().toLowerCase().replace(/\s+/g, '_');
+  const baseKey = keyInput.value.trim().toLowerCase().replace(/\s+/g, '_');
   const val = valInput.value.trim();
-  if (!key || !val) { alert('Fyll i både nyckel och värde'); return; }
-  keyInput.value = '';
+  if (!baseKey || !val) { alert('Fyll i både kategori och värde'); return; }
   valInput.value = '';
   const today = new Date().toISOString().slice(0, 10);
   try {
-    // Check if key exists — if so, append to existing value
+    // Find unique key: mediciner, mediciner_2, mediciner_3...
     const pr = await fetch('/api/profile', {headers: hdrs()});
     const pd = await pr.json();
     const hd = pd.profile?.health_data || {};
-    let newVal = val;
-    if (hd[key]) {
-      const existing = typeof hd[key] === 'object' ? (hd[key].value || '') : String(hd[key]);
-      if (existing && !existing.includes(val)) {
-        newVal = existing + ', ' + val;
-      } else if (existing) {
-        newVal = existing; // Already contains this value
-      }
-    }
+    let key = baseKey;
+    let n = 2;
+    while (hd[key]) { key = `${baseKey}_${n}`; n++; }
     const r = await fetch('/api/profile/health-data', {
       method: 'POST', headers: hdrs(),
-      body: JSON.stringify({[key]: {value: newVal, noted_at: today}}),
+      body: JSON.stringify({[key]: {value: val, noted_at: today}}),
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
@@ -1914,7 +1907,7 @@ function renderHealthData(profile) {
       } else {
         val = String(v);
       }
-      const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const label = k.replace(/_\d+$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       const delBtn = `<span class="tag-x" onclick="removeHealthDataEntry('${k}')" style="margin-left:0.3rem;cursor:pointer;opacity:0.4;font-size:0.7rem" title="Ta bort">✕</span>`;
       return `<div class="health-data-item"><span class="hd-key">${esc(label)}</span><span>${esc(String(val))}${dateStr}${delBtn}</span></div>`;
     }).join('');
