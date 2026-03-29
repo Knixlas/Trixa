@@ -1006,7 +1006,7 @@ async def log_exercise(request: Request):
     name = body.get("exercise_name", "").strip()
     date = body.get("session_date", "")
     effort = body.get("effort")  # 1-4
-    if not name or not date or effort not in (1, 2, 3, 4):
+    if not name or not date or effort not in (-1, 1, 2, 3, 4):
         raise HTTPException(400, "exercise_name, session_date, effort (1-4) required")
     admin = db.get_admin_client()
     # Upsert: update if same user+date+exercise already logged

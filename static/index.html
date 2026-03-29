@@ -210,6 +210,11 @@ input:focus { border-color: var(--accent); }
 .status-tag .tag-x { cursor: pointer; opacity: 0.5; font-size: 0.7rem; padding: 2px; }
 .status-tag .tag-x:hover { opacity: 1; }
 .effort-cell { white-space: nowrap; }
+.effort-check { background: none; border: 2px solid #444; border-radius: 50%; width: 28px; height: 28px; font-size: 0.8rem; cursor: pointer; color: #666; margin-right: 4px; transition: all 0.15s; padding: 0; line-height: 24px; }
+.effort-check.check-done { border-color: #2ecc71; color: #2ecc71; }
+.effort-check.check-skip { border-color: #e74c3c; color: #e74c3c; }
+.ex-skipped td { opacity: 0.4; text-decoration: line-through; }
+.ex-skipped .effort-cell { opacity: 1; text-decoration: none; }
 .effort-btn { background: none; border: 1px solid #333; border-radius: 6px; padding: 2px 5px; font-size: 0.75rem; cursor: pointer; margin: 0 1px; min-width: 28px; min-height: 28px; transition: all 0.15s; }
 .effort-btn.effort-active { border-color: var(--accent); transform: scale(1.15); box-shadow: 0 0 4px var(--accent); }
 .swim-set-list { margin: 0.3rem 0 0.5rem; }
@@ -1028,7 +1033,7 @@ async function renderNextStrength() {
     } catch {}
 
     if (s.exercises && s.exercises.length > 0) {
-      html += '<div style="display:flex;justify-content:flex-end;gap:0.5rem;font-size:0.65rem;color:var(--text-dim);margin-bottom:0.3rem;padding-right:0.2rem">💚 Lätt &nbsp; 💛 Medel &nbsp; 🟠 Tung &nbsp; 🔴 Max</div>';
+      html += '<div style="display:flex;justify-content:flex-end;gap:0.5rem;font-size:0.65rem;color:var(--text-dim);margin-bottom:0.3rem;padding-right:0.2rem">○ Klicka ✓ = gjord, ✕ = skippad &nbsp;|&nbsp; 💚 Lätt 💛 Medel 🟠 Tung 🔴 Max</div>';
       html += '<table class="strength-table"><thead><tr><th>Övning</th><th>Detaljer</th><th style="width:90px">Känsla</th></tr></thead><tbody>';
       for (const ex of s.exercises) {
         let detail = '';
@@ -1052,13 +1057,16 @@ async function renderNextStrength() {
         const note = ex.note ? `<br><span style="font-size:0.65rem;opacity:0.6">${esc(ex.note)}</span>` : '';
         const eName = ex.name;
         const logged = effortLogs[eName] || 0;
+        const done = logged > 0;
+        const skipped = logged === -1;
         const effortBtns = [1,2,3,4].map(v => {
           const labels = ['💚','💛','🟠','🔴'];
           const tips = ['Lätt','Medel','Tung','Max'];
           const active = logged === v ? ' effort-active' : '';
-          return `<button class="effort-btn${active}" title="${tips[v-1]}" onclick="logExerciseEffort('${s.date}','${eName.replace(/'/g,"\\'")}',${v},this)">${labels[v-1]}</button>`;
+          return `<button class="effort-btn${active}" title="${tips[v-1]}" onclick="logExerciseEffort('${s.date}','${eName.replace(/'/g,"\\'")}',${v},this)" style="${done ? '' : 'display:none'}">${labels[v-1]}</button>`;
         }).join('');
-        html += `<tr><td>${esc(eName)}</td><td>${detail}${note}</td><td class="effort-cell">${effortBtns}</td></tr>`;
+        const checkBtn = `<button class="effort-check${done ? ' check-done' : ''}${skipped ? ' check-skip' : ''}" onclick="toggleExerciseDone('${s.date}','${eName.replace(/'/g,"\\'")}',this)" title="${done ? 'Gjord' : skipped ? 'Skippad' : 'Markera gjord'}">${done ? '✓' : skipped ? '✕' : '○'}</button>`;
+        html += `<tr class="${skipped ? 'ex-skipped' : ''}"><td>${esc(eName)}</td><td>${detail}${note}</td><td class="effort-cell">${checkBtn}${effortBtns}</td></tr>`;
       }
       html += '</tbody></table>';
     } else if (s.details) {
@@ -1676,8 +1684,40 @@ async function removeStatusTag(index) {
   } catch (e) { console.error(e); }
 }
 
+async function toggleExerciseDone(date, name, btn) {
+  const row = btn.closest('tr');
+  const isDone = btn.classList.contains('check-done');
+  const isSkip = btn.classList.contains('check-skip');
+
+  if (!isDone && !isSkip) {
+    // First click: mark as done, show effort buttons
+    btn.classList.add('check-done');
+    btn.textContent = '✓';
+    row.classList.remove('ex-skipped');
+    row.querySelectorAll('.effort-btn').forEach(b => b.style.display = '');
+  } else if (isDone) {
+    // Second click: mark as skipped
+    btn.classList.remove('check-done');
+    btn.classList.add('check-skip');
+    btn.textContent = '✕';
+    row.classList.add('ex-skipped');
+    row.querySelectorAll('.effort-btn').forEach(b => { b.style.display = 'none'; b.classList.remove('effort-active'); });
+    // Log as skipped (effort = -1)
+    try {
+      await fetch('/api/exercise/log', {
+        method: 'POST', headers: hdrs(),
+        body: JSON.stringify({session_date: date, exercise_name: name, effort: -1}),
+      });
+    } catch {}
+  } else {
+    // Third click: reset to undone
+    btn.classList.remove('check-skip');
+    btn.textContent = '○';
+    row.classList.remove('ex-skipped');
+  }
+}
+
 async function logExerciseEffort(date, name, effort, btn) {
-  // Toggle: if same effort clicked again, deselect
   const row = btn.closest('tr');
   const wasActive = btn.classList.contains('effort-active');
   row.querySelectorAll('.effort-btn').forEach(b => b.classList.remove('effort-active'));
