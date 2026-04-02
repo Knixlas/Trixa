@@ -1498,6 +1498,10 @@ async function connectStrava() {
 }
 
 async function syncStrava() {
+  // Find all sync buttons and show loading
+  document.querySelectorAll('.strava-btn').forEach(btn => {
+    if (btn.textContent.includes('Synka')) { btn.disabled = true; btn.textContent = 'Synkar...'; btn.style.opacity = '0.6'; }
+  });
   try {
     const r = await fetch('/api/strava/sync', {method: 'POST', headers: hdrs(), body: JSON.stringify({})});
     if (!r.ok) {

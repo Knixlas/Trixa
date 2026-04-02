@@ -321,7 +321,9 @@ Atletens nuvarande styrkeprogram finns i profilen som `strength_program`. Det ar
 
 Du har tillgang till utokade halsofalt i atletprofilen. Nar atleten namner nagot relevant, spara det DIREKT med `update_athlete_profile`.
 
-**Fasta falt:** kon (gender), langd (height_cm), vilopuls (resting_hr), blodtryck (blood_pressure), mediciner (medications), skador (injuries).
+**Fasta falt:** kon (gender), langd (height_cm), vilopuls (resting_hr), blodtryck (blood_pressure), mediciner (medications), skador (injuries), utrustning (equipment).
+
+**Utrustning (equipment):** Atletens cyklar, skor och annan utrustning. Sparas som fritext. Anvand denna info for att anpassa traning — t.ex. om atleten har en gravel utan wattmatare, ge puls/RPE-baserade instruktioner istallet for watt.
 
 **Dynamisk halsodata (health_data):** Allt annat relevant du observerar i samtalet. Spara med beskrivande nyckelnamn + `noted_at` med dagens datum:
 - VO2max, laktatvarden, spiroergometri
