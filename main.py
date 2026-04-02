@@ -1749,7 +1749,13 @@ async def strava_sync(request: Request):
         strava_tokens = ensure_fresh_token(strava_tokens, client_id=cid, client_secret=secret)
         if strava_tokens.get("_refreshed"):
             db.update_strava_tokens(uid, strava_tokens)
+    except Exception as e:
+        # Token refresh failed — token is invalid, clear it so user can reconnect
+        print(f"Strava token refresh failed: {traceback.format_exc()}")
+        db.delete_strava_tokens(uid)
+        raise HTTPException(401, "Strava-kopplingen har gatt ut. Koppla om Strava under Profil.")
 
+    try:
         after = int(time.time()) - months * 30 * 86400
         max_pages = 10 if months > 6 else 5
         raw = get_activities(strava_tokens["access_token"], after=after, max_pages=max_pages)
