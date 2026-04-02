@@ -1540,10 +1540,20 @@ function renderStravaProfile() {
   if (stravaData.connected) {
     el.innerHTML = `<div class="profile-row"><span class="label">Status</span><span style="color:#2ecc71">Kopplad</span></div>
       <button class="strava-btn" onclick="syncStravaFull()" style="margin-top:0.5rem">Ladda ner allt från Strava</button>
+      <button class="strava-btn disconnect" onclick="reconnectStrava()" style="margin-top:0.4rem">Koppla om</button>
       <button class="strava-btn disconnect" onclick="disconnectStrava()" style="margin-top:0.4rem">Koppla fran</button>`;
   } else {
     el.innerHTML = `<button class="strava-btn" onclick="connectStrava()">Koppla Strava</button>`;
   }
+}
+
+async function reconnectStrava() {
+  // Disconnect then immediately reconnect
+  try {
+    await fetch('/api/strava/disconnect', {method: 'DELETE', headers: hdrs()});
+    stravaData = {activities: [], connected: false};
+    await connectStrava();
+  } catch (e) { alert('Fel: ' + e.message); }
 }
 
 // ── Profile ──
