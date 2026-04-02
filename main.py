@@ -1685,7 +1685,8 @@ async def strava_connect(request: Request):
         raise HTTPException(400, "Lagg in dina Strava API-nycklar under Profil forst")
 
     from integrations.strava import get_authorization_url, sign_state
-    redirect_uri = str(request.base_url).rstrip("/") + "/api/strava/callback"
+    base = str(request.base_url).rstrip("/").replace("http://", "https://")
+    redirect_uri = base + "/api/strava/callback"
     state = sign_state(uid)
     url = get_authorization_url(redirect_uri, state, client_id=cid)
     return {"url": url}
@@ -1710,7 +1711,8 @@ async def strava_callback(request: Request, code: str = "", state: str = "", err
         cid = profile_row.data[0].get("strava_client_id", "") or ""
         secret = profile_row.data[0].get("strava_client_secret", "") or ""
 
-    redirect_uri = str(request.base_url).rstrip("/") + "/api/strava/callback"
+    base = str(request.base_url).rstrip("/").replace("http://", "https://")
+    redirect_uri = base + "/api/strava/callback"
 
     try:
         tokens = exchange_code(code, redirect_uri, client_id=cid, client_secret=secret)
