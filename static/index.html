@@ -163,10 +163,11 @@ input:focus { border-color: var(--accent); }
 .activity-details .name { font-weight: 600; font-size: 0.8rem; }
 .activity-details .stats { color: var(--text-dim); font-size: 0.75rem; }
 .activity-date { color: var(--text-dim); font-size: 0.7rem; white-space: nowrap; }
-.rating-input { margin-top: 2px; }
-.rating-input .star { cursor: pointer; font-size: 0.9rem; color: #666; transition: color 0.1s; }
+.rating-input { margin-top: 4px; display: flex; gap: 2px; }
+.rating-input .star { cursor: pointer; font-size: 1.4rem; color: #666; transition: color 0.1s; padding: 4px 2px; -webkit-tap-highlight-color: transparent; }
 .rating-input .star:hover, .rating-input .star:hover ~ .star { color: var(--accent); }
-.rating-display { font-size: 0.8rem; color: #f5a623; margin-top: 2px; }
+.rating-display { font-size: 1.2rem; color: #f5a623; margin-top: 4px; cursor: pointer; }
+.rating-display .star { padding: 4px 2px; }
 .strength-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 0.3rem; }
 .strength-table th { text-align: left; color: var(--text-dim); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; padding: 0.3rem 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
 .strength-table td { padding: 0.35rem 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
@@ -492,6 +493,12 @@ input:focus { border-color: var(--accent); }
             <span class="toggle-slider"></span>
           </label>
         </div>
+      </div>
+
+      <!-- Coach connection -->
+      <div class="profile-section" id="coach-connection-section">
+        <h3>Coach</h3>
+        <div id="coach-connection-status"></div>
       </div>
 
       <!-- Strava status -->
@@ -1405,13 +1412,15 @@ async function rateActivity(stravaId, rating, el) {
       body: JSON.stringify({rating}),
     });
     if (r.ok) {
-      // Update display: replace clickable stars with solid stars
-      const container = el.parentElement;
-      container.innerHTML = '★'.repeat(rating) + '☆'.repeat(5 - rating);
-      container.className = 'rating-display';
       // Update cached data
       const act = stravaData.activities.find(a => a.strava_id === stravaId);
       if (act) act.rating = rating;
+      // Re-render with clickable rated stars (can be changed)
+      const container = el.closest('.rating-input') || el.closest('.rating-display') || el.parentElement;
+      container.className = 'rating-display';
+      container.innerHTML = [1,2,3,4,5].map(n =>
+        `<span class="star" onclick="rateActivity(${stravaId}, ${n}, this)">${n <= rating ? '\u2605' : '\u2606'}</span>`
+      ).join('');
     }
   } catch (e) { console.error('Rating error:', e); }
 }
@@ -1562,6 +1571,39 @@ async function reconnectStrava() {
   } catch (e) { alert('Fel: ' + e.message); }
 }
 
+// ── Coach Connection Status ──
+async function loadCoachConnection() {
+  const el = document.getElementById('coach-connection-status');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/coach/connection', {headers: hdrs()});
+    if (!r.ok) { el.innerHTML = '<span style="color:var(--text-dim)">\u274C Ingen coach kopplad</span>'; return; }
+    const data = await r.json();
+    if (data.connected) {
+      el.innerHTML = `
+        <div class="profile-row"><span class="label">Status</span><span style="color:#2ecc71">Kopplad</span></div>
+        <div class="profile-row"><span class="label">Coach</span><span>${esc(data.coach_name || data.coach_email || '')}</span></div>
+        ${data.accepted_at ? `<div class="profile-row"><span class="label">Sedan</span><span>${data.accepted_at.slice(0,10)}</span></div>` : ''}
+        <button class="strava-btn disconnect" onclick="disconnectCoach('${data.id}')" style="margin-top:0.5rem">Koppla bort coach</button>
+      `;
+    } else {
+      el.innerHTML = '<span style="color:var(--text-dim)">\u274C Ingen coach kopplad</span>';
+    }
+  } catch { el.innerHTML = '<span style="color:var(--text-dim)">\u274C Ingen coach kopplad</span>'; }
+}
+
+async function disconnectCoach(relationshipId) {
+  if (!confirm('Koppla bort din coach? De kommer inte langre kunna se din traningsdata.')) return;
+  try {
+    await fetch('/api/coach/disconnect', {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({relationship_id: relationshipId})
+    });
+    loadCoachConnection();
+    alert('Coach bortkopplad');
+  } catch (e) { alert('Fel: ' + e.message); }
+}
+
 // ── Coach Invitations ──
 async function loadCoachInvitations() {
   const banner = document.getElementById('coach-invite-banner');
@@ -1649,6 +1691,7 @@ async function renderProfile() {
   } catch {}
   renderStravaProfile();
   loadCoachInvitations();
+  loadCoachConnection();
 }
 
 async function saveAthleteProfile() {

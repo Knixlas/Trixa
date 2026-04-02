@@ -1908,3 +1908,45 @@ async def respond_coach_invitation(request: Request):
 
     admin.table("coach_athletes").update(update).eq("id", invitation_id).execute()
     return {"status": update["status"]}
+
+
+@app.get("/api/coach/connection")
+async def get_coach_connection(request: Request):
+    """Get current coach connection for the athlete."""
+    uid, token = _get_auth(request)
+    admin = db.get_admin_client()
+    result = admin.table("coach_athletes") \
+        .select("id, coach_id, accepted_at") \
+        .eq("athlete_id", uid) \
+        .eq("status", "accepted") \
+        .execute()
+    if not result.data:
+        return {"connected": False}
+    rel = result.data[0]
+    coach_profile = admin.table("profiles").select("email, display_name").eq("id", rel["coach_id"]).execute()
+    coach_email = coach_profile.data[0].get("email", "") if coach_profile.data else ""
+    coach_name = coach_profile.data[0].get("display_name", "") if coach_profile.data else ""
+    return {
+        "connected": True,
+        "id": rel["id"],
+        "coach_email": coach_email,
+        "coach_name": coach_name,
+        "accepted_at": rel.get("accepted_at"),
+    }
+
+
+@app.post("/api/coach/disconnect")
+async def disconnect_coach(request: Request):
+    """Athlete disconnects from their coach."""
+    uid, _ = _get_auth(request)
+    body = await request.json()
+    relationship_id = body.get("relationship_id")
+    if not relationship_id:
+        raise HTTPException(400, "relationship_id kravs")
+    admin = db.get_admin_client()
+    # Verify this relationship belongs to the athlete
+    result = admin.table("coach_athletes").select("athlete_id").eq("id", relationship_id).execute()
+    if not result.data or result.data[0]["athlete_id"] != uid:
+        raise HTTPException(403, "Inte din koppling")
+    admin.table("coach_athletes").update({"status": "removed"}).eq("id", relationship_id).execute()
+    return {"ok": True}
