@@ -1548,11 +1548,14 @@ function renderStravaProfile() {
 }
 
 async function reconnectStrava() {
-  // Disconnect then immediately reconnect
   try {
+    // Delete old tokens first
     await fetch('/api/strava/disconnect', {method: 'DELETE', headers: hdrs()});
-    stravaData = {activities: [], connected: false};
-    await connectStrava();
+    // Then start fresh OAuth flow
+    const r = await fetch('/api/strava/connect', {headers: hdrs()});
+    if (!r.ok) { alert('Kunde inte starta Strava-koppling'); return; }
+    const data = await r.json();
+    if (data.url) window.location.href = data.url;
   } catch (e) { alert('Fel: ' + e.message); }
 }
 
