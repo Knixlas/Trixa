@@ -1715,7 +1715,9 @@ async def strava_callback(request: Request, code: str = "", state: str = "", err
     redirect_uri = base + "/api/strava/callback"
 
     try:
+        print(f"Strava callback: redirect_uri={redirect_uri}, cid={cid[:4]}..., has_secret={bool(secret)}")
         tokens = exchange_code(code, redirect_uri, client_id=cid, client_secret=secret)
+        print(f"Strava callback: exchange OK, saving tokens")
         db.save_strava_tokens(user_id, tokens)
 
         import time
@@ -1723,8 +1725,11 @@ async def strava_callback(request: Request, code: str = "", state: str = "", err
         raw_activities = get_activities(tokens["access_token"], after=after, max_pages=10)
         parsed = [parse_activity(a) for a in raw_activities]
         db.upsert_strava_activities(user_id, parsed)
+        print(f"Strava callback: synced {len(parsed)} activities")
     except Exception as e:
-        print(f"Strava callback error: {e}")
+        import traceback
+        print(f"Strava callback FAILED: {e}")
+        print(traceback.format_exc())
         return RedirectResponse("/?strava=error")
 
     return RedirectResponse("/?strava=connected")
