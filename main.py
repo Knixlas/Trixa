@@ -1837,3 +1837,74 @@ async def workout_preferences(request: Request):
             "disliked": sum(1 for r in p["ratings"] if r <= 2),
         })
     return {"preferences": sorted(summary, key=lambda x: -x["avg_rating"])}
+
+
+# ── Coach Invitations (athlete-side) ─────────────────────────────
+
+@app.get("/api/coach/invitations")
+async def get_coach_invitations(request: Request):
+    """Get pending coach invitations for the current athlete."""
+    uid, token = _get_auth(request)
+    admin = db.get_admin_client()
+    # Get user email
+    user_profile = admin.table("profiles").select("email").eq("id", uid).execute()
+    email = (user_profile.data[0].get("email", "") if user_profile.data else "").lower()
+    if not email:
+        return []
+    # Find pending invitations for this email
+    result = admin.table("coach_athletes") \
+        .select("id, coach_id, athlete_email, status, invited_at") \
+        .eq("athlete_email", email) \
+        .eq("status", "pending") \
+        .execute()
+    # Enrich with coach email
+    invitations = []
+    for inv in (result.data or []):
+        coach_profile = admin.table("profiles").select("email, display_name").eq("id", inv["coach_id"]).execute()
+        coach_email = coach_profile.data[0].get("email", "") if coach_profile.data else ""
+        coach_name = coach_profile.data[0].get("display_name", "") if coach_profile.data else ""
+        invitations.append({
+            **inv,
+            "coach_email": coach_email,
+            "coach_name": coach_name,
+        })
+    return invitations
+
+
+@app.post("/api/coach/invitation-respond")
+async def respond_coach_invitation(request: Request):
+    """Athlete accepts or rejects a coach invitation."""
+    uid, token = _get_auth(request)
+    body = await request.json()
+    invitation_id = body.get("invitation_id")
+    accept = body.get("accept", False)
+
+    if not invitation_id:
+        raise HTTPException(400, "invitation_id kravs")
+
+    admin = db.get_admin_client()
+    # Find the invitation
+    result = admin.table("coach_athletes").select("*").eq("id", invitation_id).execute()
+    if not result.data:
+        raise HTTPException(404, "Inbjudan hittades inte")
+    inv = result.data[0]
+
+    # Verify the athlete's email matches
+    user_profile = admin.table("profiles").select("email").eq("id", uid).execute()
+    user_email = (user_profile.data[0].get("email", "") if user_profile.data else "").lower()
+    if inv["athlete_email"].lower() != user_email:
+        raise HTTPException(403, "Denna inbjudan ar inte for dig")
+
+    if inv["status"] != "pending":
+        raise HTTPException(409, f"Inbjudan ar redan {inv['status']}")
+
+    from datetime import datetime, timezone
+    update = {
+        "status": "accepted" if accept else "rejected",
+        "athlete_id": uid,
+    }
+    if accept:
+        update["accepted_at"] = datetime.now(timezone.utc).isoformat()
+
+    admin.table("coach_athletes").update(update).eq("id", invitation_id).execute()
+    return {"status": update["status"]}

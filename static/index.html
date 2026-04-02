@@ -477,6 +477,9 @@ input:focus { border-color: var(--accent); }
     <div id="profile-overview" style="display:none">
       <div class="profile-section" id="profile-info"></div>
 
+      <!-- Coach invitation banner -->
+      <div id="coach-invite-banner" style="display:none"></div>
+
       <!-- DominaTrixa toggle -->
       <div class="profile-section">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -1559,6 +1562,45 @@ async function reconnectStrava() {
   } catch (e) { alert('Fel: ' + e.message); }
 }
 
+// ── Coach Invitations ──
+async function loadCoachInvitations() {
+  const banner = document.getElementById('coach-invite-banner');
+  if (!banner) return;
+  try {
+    const r = await fetch('/api/coach/invitations', {headers: hdrs()});
+    if (!r.ok) { banner.style.display = 'none'; return; }
+    const invitations = await r.json();
+    if (!invitations.length) { banner.style.display = 'none'; return; }
+    banner.style.display = 'block';
+    banner.innerHTML = invitations.map(inv => `
+      <div class="profile-section" style="border:1px solid var(--accent);margin-bottom:0.5rem">
+        <h3 style="margin:0 0 0.3rem">\u{1F3CB} En coach vill folja din traning</h3>
+        <p style="font-size:0.8rem;color:var(--text-dim);margin:0 0 0.8rem">Inbjudan fran ${esc(inv.coach_email || 'coach')} — ${inv.invited_at?.slice(0,10) || ''}</p>
+        <div style="display:flex;gap:0.5rem">
+          <button class="strava-btn" style="flex:1" onclick="respondCoachInvite('${inv.id}', true)">Acceptera</button>
+          <button class="strava-btn disconnect" style="flex:1" onclick="respondCoachInvite('${inv.id}', false)">Avboj</button>
+        </div>
+      </div>
+    `).join('');
+  } catch { banner.style.display = 'none'; }
+}
+
+async function respondCoachInvite(id, accept) {
+  try {
+    const r = await fetch('/api/coach/invitation-respond', {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({invitation_id: id, accept})
+    });
+    if (r.ok) {
+      alert(accept ? 'Accepterat! Din coach kan nu se din traningsdata.' : 'Avbojt.');
+      loadCoachInvitations();
+    } else {
+      const d = await r.json();
+      alert('Fel: ' + (d.error || d.detail || 'Okant fel'));
+    }
+  } catch (e) { alert('Fel: ' + e.message); }
+}
+
 // ── Profile ──
 async function renderProfile() {
   document.getElementById('profile-info').innerHTML = `<h3>Konto</h3>
@@ -1606,6 +1648,7 @@ async function renderProfile() {
     }
   } catch {}
   renderStravaProfile();
+  loadCoachInvitations();
 }
 
 async function saveAthleteProfile() {
