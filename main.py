@@ -79,7 +79,8 @@ class DiscountRequest(BaseModel):
 
 def _build_system_prompt(profile: dict | None, activities: list[dict] | None = None,
                          coach_memories: list[dict] | None = None,
-                         current_plan: list[dict] | None = None) -> str:
+                         current_plan: list[dict] | None = None,
+                         daily_metrics: list[dict] | None = None) -> str:
     template = SYSTEM_PROMPT_FILE.read_text(encoding="utf-8")
     now = datetime.now()
     # Build date lookup table for next 14 days so Trixa never miscalculates weekdays
@@ -113,7 +114,7 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
     else:
         template = template.replace("{ATHLETE_PROFILE}", "Ingen profil tillganglig.")
 
-    # Strava activities (with enjoyment ratings — 1=tråkigt, 5=superkul)
+    # Recent activities from training_log (with enjoyment ratings — 1=tråkigt, 5=superkul)
     if activities:
         lines = []
         rated_summary = {}
@@ -129,6 +130,8 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
                 parts.append(f"puls {a['avg_hr']}")
             if a.get("avg_power"):
                 parts.append(f"{a['avg_power']}W")
+            if a.get("athlete_note"):
+                parts.append(f"atletens anteckning: \"{a['athlete_note']}\"")
             if a.get("rating"):
                 parts.append(f"betyg: {a['rating']}/5")
                 if a.get("rating_comment"):
@@ -146,7 +149,7 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
                 lines.append(f"  {emoji} {t}: snitt {avg:.1f}/5 ({len(ratings)} betygsatta) — {'alskar det!' if avg >= 4 else 'gillar inte' if avg <= 2 else 'ok'}")
         template = template.replace("{RECENT_ACTIVITIES}", "\n".join(lines))
     else:
-        template = template.replace("{RECENT_ACTIVITIES}", "Ingen Strava-koppling eller inga aktiviteter.")
+        template = template.replace("{RECENT_ACTIVITIES}", "Inga loggade aktiviteter de senaste 60 dagarna.")
 
     # Append coaching knowledge base (condensed reference)
     try:
@@ -256,6 +259,16 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
                     template += f"- Atletens egen bedomning: {user_a}/5\n"
                 if trixa_a:
                     template += f"- Trixas bedomning: {trixa_a.get('value', '?')}/5 ({trixa_a.get('timestamp', '')})\n"
+
+    # Inject Garmin daily metrics (HRV, sleep, resting HR, load) — synced daily
+    if daily_metrics:
+        dm_text = db.format_daily_metrics(daily_metrics, max_days=7)
+        if dm_text:
+            template += "\n\n## Dagliga halsomatningar fran Garmin (senaste 7 dagarna, nyast forst)\n"
+            template += ("Detta ar faktiska matvarden, synkade automatiskt. De ar farskare an "
+                         "motsvarande varden i 'Extra halsodata' — anvand dessa for HRV, vilopuls, "
+                         "somn och belastning. Vag in dem i bedomningen av dagsform och planering.\n")
+            template += dm_text
 
     # Inject coach memory (relational observations)
     if coach_memories:
@@ -653,7 +666,7 @@ async def chat(req: ChatRequest, request: Request):
     # Build system prompt from profile + activities + coach memory + plan
     profile = db.get_profile(uid, token)
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=60)
+        activities = db.get_recent_activities(uid, token, days=60)
     except Exception:
         activities = None
     try:
@@ -667,7 +680,12 @@ async def chat(req: ChatRequest, request: Request):
         current_plan = db.get_planned_sessions(uid, token, from_d, to_d)
     except Exception:
         pass
-    system_prompt = _build_system_prompt(profile, activities, coach_memories, current_plan)
+    try:
+        daily_metrics = db.get_daily_metrics(uid, days=14)
+    except Exception as e:
+        print(f"[daily_metrics] {e}")
+        daily_metrics = None
+    system_prompt = _build_system_prompt(profile, activities, coach_memories, current_plan, daily_metrics)
 
     # DominaTrixa persona override
     if req.domina:
@@ -860,7 +878,7 @@ async def debug_context(request: Request):
     except Exception as e:
         errors.append(f"profile: {e}")
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=60)
+        activities = db.get_recent_activities(uid, token, days=60)
     except Exception as e:
         errors.append(f"activities: {e}")
     try:
@@ -873,12 +891,19 @@ async def debug_context(request: Request):
         plan = db.get_planned_sessions(uid, token, from_d, to_d)
     except Exception as e:
         errors.append(f"plan: {e}")
+    metrics = None
+    try:
+        metrics = db.get_daily_metrics(uid, days=14)
+    except Exception as e:
+        errors.append(f"daily_metrics: {e}")
 
     return {
         "profile_fields": db.profile_to_dict(profile) if profile else None,
         "activities_count": len(activities) if activities else 0,
         "memories": memories or [],
         "planned_sessions": len(plan) if plan else 0,
+        "daily_metrics_count": len(metrics) if metrics else 0,
+        "latest_daily_metric": metrics[0] if metrics else None,
         "errors": errors,
     }
 
@@ -963,7 +988,7 @@ async def plan_status(request: Request):
         planned = []
 
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=1)
+        activities = db.get_recent_activities(uid, token, days=1)
     except Exception:
         activities = []
 
@@ -976,34 +1001,43 @@ async def plan_status(request: Request):
         is_today = (i == 0)
 
         day_plans = [p for p in planned if p.get("date") == date_str]
-        # Build list of individual sessions for this day
+        day_activities = [a for a in activities if a.get("date") == date_str]
+        # Match activities to sessions one-to-one, so a completed first
+        # session doesn't mark the whole day (both sessions) as done.
+        matches, extra_acts = db.match_activities_to_sessions(day_plans, day_activities)
+
+        def _act_summary(a: dict) -> str:
+            p = [a.get("type", "")]
+            if a.get("duration_min"): p.append(f"{int(a['duration_min'])}min")
+            if a.get("distance_km"): p.append(f"{a['distance_km']}km")
+            return " ".join(p)
+
         sessions_list = []
-        for p in day_plans:
+        for p, a in zip(day_plans, matches):
+            done = a is not None or p.get("status") == "completed"
             sessions_list.append({
                 "title": p.get("title", ""),
                 "details": p.get("details", ""),
                 "purpose": p.get("purpose", ""),
                 "sport": p.get("sport", ""),
                 "duration_min": p.get("duration_min"),
+                "status": p.get("status"),
+                "done": done,
+                "actual": _act_summary(a) if a else "",
             })
         plan_title = " + ".join(s["title"] for s in sessions_list) if sessions_list else ""
         plan_details = sessions_list[0]["details"] if sessions_list else ""
         plan_purpose = sessions_list[0]["purpose"] if sessions_list else ""
 
-        day_activities = [a for a in activities if a.get("date") == date_str]
-        actual_summary = ""
-        if day_activities:
-            parts = []
-            for a in day_activities:
-                p = [a.get("type", "")]
-                if a.get("duration_min"): p.append(f"{int(a['duration_min'])}min")
-                if a.get("distance_km"): p.append(f"{a['distance_km']}km")
-                parts.append(" ".join(p))
-            actual_summary = " + ".join(parts)
+        actual_summary = " + ".join(_act_summary(a) for a in day_activities)
+        extra_summary = " + ".join(_act_summary(a) for a in extra_acts)
 
-        if day_activities:
-            is_rest = plan_title and ("vila" in plan_title.lower())
-            status = "yellow" if is_rest else "green"
+        training = [s for s in sessions_list if db._norm_sport(s["sport"]) != "rest"]
+        all_done = bool(training) and all(s["done"] for s in training)
+        if day_activities and not training:
+            status = "yellow" if day_plans else "green"  # trained on rest day / unplanned
+        elif all_done:
+            status = "green"
         elif is_today:
             status = "today"
         else:
@@ -1017,6 +1051,7 @@ async def plan_status(request: Request):
             "details": plan_details,
             "purpose": plan_purpose,
             "actual": actual_summary,
+            "extra": extra_summary,
             "status": status,
             "is_today": is_today,
         })
@@ -1104,8 +1139,7 @@ async def get_exercise_logs(request: Request, date: str = ""):
     uid, token = _get_auth(request)
     if not date:
         raise HTTPException(400, "date parameter required")
-    client = db.get_client()
-    client.postgrest.auth(token)
+    client = db.get_user_client(token)
     result = (
         client.table("exercise_logs")
         .select("*")
@@ -1292,7 +1326,7 @@ async def coach_brief(request: Request, refresh: int = 0, domina: int = 0):
 
     profile = db.get_profile(uid, token)
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=14)
+        activities = db.get_recent_activities(uid, token, days=14)
     except Exception:
         activities = []
 
@@ -1301,7 +1335,14 @@ async def coach_brief(request: Request, refresh: int = 0, domina: int = 0):
     except Exception:
         memories = []
 
-    if not activities and not memories:
+    try:
+        brief_metrics = db.get_daily_metrics(uid, days=7)
+    except Exception as e:
+        print(f"[daily_metrics] {e}")
+        brief_metrics = []
+    metrics_text = db.format_daily_metrics(brief_metrics, max_days=3)
+
+    if not activities and not memories and not brief_metrics:
         return {"brief": "Koppla Strava eller chatta med mig sa jag kan lara kanna dig!", "follow_up": None}
 
     act_lines = []
@@ -1327,7 +1368,13 @@ async def coach_brief(request: Request, refresh: int = 0, domina: int = 0):
         today_str = now.strftime("%Y-%m-%d")
         plan_sessions = db.get_planned_sessions(uid, token, today_str, today_str)
         if plan_sessions:
-            plan_today = ", ".join(p.get("title", "") for p in plan_sessions)
+            today_acts = [a for a in (activities or []) if a.get("date") == today_str]
+            matches, _ = db.match_activities_to_sessions(plan_sessions, today_acts)
+            labels = []
+            for p, a in zip(plan_sessions, matches):
+                done = a is not None or p.get("status") == "completed"
+                labels.append(f"{p.get('title', '')} ({'KLART' if done else 'KVAR att gora'})")
+            plan_today = ", ".join(labels)
     except Exception:
         pass
 
@@ -1400,10 +1447,11 @@ Regler:
 - Max 3 meningar, direkt och {'sarkastisk' if domina else 'varm'}
 - STALL ALDRIG FRAGOR. Inga fragetecken. Bara pastaenden, analys, observationer och {'han' if domina else 'uppmaningar'}.
 - Anledning: atleten kan inte svara i denna ruta — den ar enbart for visning.
-- PRIORITET: Om atleten REDAN genomfort ett pass idag — kommentera det passet (data, prestation, analys). Namna INTE det planerade passet om det redan ar gjort.
-- Om inget genomfort idag: paminn om dagens planerade pass.
+- PRIORITET: Om atleten REDAN genomfort ett pass idag — kommentera det passet (data, prestation, analys). Namna INTE planerade pass markerade KLART.
+- Planerade pass markerade "KVAR att gora" ar INTE gjorda — paminn om dem, aven om ett annat pass redan ar klart idag.
 - Referera till FAKTISK data (typ, puls, fart, distans)
 - Om du ser monster (overtraning, for hart, bra trend) — namna det
+- Vag in HRV, vilopuls, somn och belastningskvot om de finns (t.ex. lag HRV eller hog akut/kronisk-kvot = var forsiktig)
 - Svara pa svenska, tilltala vid namn
 
 Idag ar {weekday} {now.strftime('%Y-%m-%d')}."""
@@ -1414,13 +1462,16 @@ Dagens GENOMFORDA pass: {today_done or 'Inget genomfort annu'}
 Dagens PLANERADE pass: {plan_today or 'Inget planerat'}
 Gardagens pass: {yesterday_activity or 'Vila / inget registrerat'}
 
+Halsomatningar fran Garmin (senaste dagarna, nyast forst):
+{metrics_text or 'Ingen data'}
+
 Senaste 14 dagars traning:
 {chr(10).join(act_lines) if act_lines else 'Ingen data'}
 
 Minnesanteckningar om atleten:
 {chr(10).join(mem_lines) if mem_lines else 'Inga anteckningar annu'}
 
-VIKTIGT: Om det finns genomforda pass idag, kommentera DEM — inte planerade pass som redan ar klara."""
+VIKTIGT: Om det finns genomforda pass idag, kommentera DEM. Pass markerade "KVAR att gora" aterstar fortfarande — ett genomfort pass betyder INTE att hela dagen ar klar."""
 
     try:
         response = api_client.messages.create(
@@ -1813,8 +1864,7 @@ async def rate_activity(strava_id: int, request: Request):
 async def workout_preferences(request: Request):
     """Get user's workout type preferences based on ratings."""
     uid, token = _get_auth(request)
-    client = db.get_client()
-    client.postgrest.auth(token)
+    client = db.get_user_client(token)
     result = client.table("strava_activities") \
         .select("type, rating") \
         .eq("user_id", uid) \

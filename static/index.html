@@ -224,6 +224,7 @@ input:focus { border-color: var(--accent); }
 .week-session { color: var(--text); font-size: 0.78rem; padding: 1px 0; border-left: 2px solid var(--accent); padding-left: 0.4rem; margin-bottom: 2px; }
 .week-actual { color: #2ecc71; font-size: 0.7rem; margin-top: 1px; }
 .week-actual.missed { color: #e74c3c; }
+.session-done { color: #2ecc71; }
 
 /* ── Goals ── */
 .goal-item { margin-bottom: 0.5rem; }
@@ -974,9 +975,9 @@ async function renderNextSession() {
     const LABELS = ['Idag','Imorgon'];
     for (let i = 0; i < cachedPlanStatus.days.length; i++) {
       const d = cachedPlanStatus.days[i];
-      const sessions = (d.sessions || []).filter(s => s.sport?.toLowerCase() !== 'vila');
+      // Per session: skip only the sessions already done, not the whole day
+      const sessions = (d.sessions || []).filter(s => s.sport?.toLowerCase() !== 'vila' && !s.done);
       if (sessions.length === 0) continue;
-      if (d.actual) continue;
 
       const label = i < 2 ? LABELS[i] : d.day;
       let html = `<div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem">${label}</div>`;
@@ -1164,19 +1165,26 @@ async function renderWeekPlan() {
       const label = i < 2 ? dayLabels[i] : d.day;
       const sessions = d.sessions || [];
       let plannedHtml = '';
+      const sessLine = s => {
+        const mark = s.done ? '&#x2713; ' : '';
+        const act = s.actual ? ` <span class="week-actual" style="display:inline">(${esc(s.actual)})</span>` : '';
+        return `${mark}${esc(s.title)}${act}`;
+      };
       if (sessions.length > 1) {
-        plannedHtml = sessions.map(s => `<div class="week-session">${esc(s.title)}</div>`).join('');
+        plannedHtml = sessions.map(s => `<div class="week-session${s.done ? ' session-done' : ''}">${sessLine(s)}</div>`).join('');
       } else if (sessions.length === 1) {
-        plannedHtml = `<div class="week-planned">${esc(sessions[0].title)}</div>`;
+        plannedHtml = `<div class="week-planned${sessions[0].done ? ' session-done' : ''}">${sessLine(sessions[0])}</div>`;
       } else {
         plannedHtml = '<span style="color:var(--text-dim)">-</span>';
       }
+      // Activities not matched to any planned session (or no plan that day)
+      const extraTxt = sessions.length ? d.extra : d.actual;
       html += `<div class="week-row${todayClass}">
         <div class="week-day">${esc(label)}</div>
         <div class="week-dot ${dotClass}"></div>
         <div class="week-info">
           ${plannedHtml}
-          ${d.actual ? `<div class="week-actual">&#x2713; ${esc(d.actual)}</div>` : ''}
+          ${extraTxt ? `<div class="week-actual">&#x2713; ${sessions.length ? 'Extra: ' : ''}${esc(extraTxt)}</div>` : ''}
         </div>
       </div>`;
     }
