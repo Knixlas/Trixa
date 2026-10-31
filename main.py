@@ -113,7 +113,7 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
     else:
         template = template.replace("{ATHLETE_PROFILE}", "Ingen profil tillganglig.")
 
-    # Strava activities (with enjoyment ratings — 1=tråkigt, 5=superkul)
+    # Recent activities from training_log (with enjoyment ratings — 1=tråkigt, 5=superkul)
     if activities:
         lines = []
         rated_summary = {}
@@ -146,7 +146,7 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
                 lines.append(f"  {emoji} {t}: snitt {avg:.1f}/5 ({len(ratings)} betygsatta) — {'alskar det!' if avg >= 4 else 'gillar inte' if avg <= 2 else 'ok'}")
         template = template.replace("{RECENT_ACTIVITIES}", "\n".join(lines))
     else:
-        template = template.replace("{RECENT_ACTIVITIES}", "Ingen Strava-koppling eller inga aktiviteter.")
+        template = template.replace("{RECENT_ACTIVITIES}", "Inga loggade aktiviteter de senaste 60 dagarna.")
 
     # Append coaching knowledge base (condensed reference)
     try:
@@ -653,7 +653,7 @@ async def chat(req: ChatRequest, request: Request):
     # Build system prompt from profile + activities + coach memory + plan
     profile = db.get_profile(uid, token)
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=60)
+        activities = db.get_recent_activities(uid, token, days=60)
     except Exception:
         activities = None
     try:
@@ -860,7 +860,7 @@ async def debug_context(request: Request):
     except Exception as e:
         errors.append(f"profile: {e}")
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=60)
+        activities = db.get_recent_activities(uid, token, days=60)
     except Exception as e:
         errors.append(f"activities: {e}")
     try:
@@ -963,7 +963,7 @@ async def plan_status(request: Request):
         planned = []
 
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=1)
+        activities = db.get_recent_activities(uid, token, days=1)
     except Exception:
         activities = []
 
@@ -1292,7 +1292,7 @@ async def coach_brief(request: Request, refresh: int = 0, domina: int = 0):
 
     profile = db.get_profile(uid, token)
     try:
-        activities = db.get_recent_strava_activities(uid, token, days=14)
+        activities = db.get_recent_activities(uid, token, days=14)
     except Exception:
         activities = []
 

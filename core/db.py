@@ -428,6 +428,31 @@ def get_training_log(user_id: str, access_token: str, days: int = 60) -> list[di
     return result.data or []
 
 
+def get_recent_activities(user_id: str, access_token: str, days: int = 14) -> list[dict]:
+    """Recent activities from training_log (all sources: strava, tp, manual),
+    mapped to the strava_activities shape (type/name) the prompt builders use.
+    Ratings stored on strava_activities are merged in by strava_id."""
+    log = get_training_log(user_id, access_token, days=days)
+    ratings: dict = {}
+    try:
+        for s in get_recent_strava_activities(user_id, access_token, days=days):
+            if s.get("rating"):
+                ratings[s.get("strava_id")] = s
+    except Exception:
+        pass
+    out = []
+    for t in log:
+        a = dict(t)
+        a["type"] = t.get("sport") or "other"
+        a["name"] = t.get("title") or ""
+        r = ratings.get(t.get("strava_id"))
+        if r and not a.get("rating"):
+            a["rating"] = r.get("rating")
+            a["rating_comment"] = r.get("rating_comment")
+        out.append(a)
+    return out
+
+
 # ── Coach Memory ────────────────────────────────────────────────
 
 def save_memory_observations(user_id: str, observations: list[dict]):
