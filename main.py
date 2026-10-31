@@ -79,7 +79,8 @@ class DiscountRequest(BaseModel):
 
 def _build_system_prompt(profile: dict | None, activities: list[dict] | None = None,
                          coach_memories: list[dict] | None = None,
-                         current_plan: list[dict] | None = None) -> str:
+                         current_plan: list[dict] | None = None,
+                         daily_metrics: list[dict] | None = None) -> str:
     template = SYSTEM_PROMPT_FILE.read_text(encoding="utf-8")
     now = datetime.now()
     # Build date lookup table for next 14 days so Trixa never miscalculates weekdays
@@ -256,6 +257,16 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
                     template += f"- Atletens egen bedomning: {user_a}/5\n"
                 if trixa_a:
                     template += f"- Trixas bedomning: {trixa_a.get('value', '?')}/5 ({trixa_a.get('timestamp', '')})\n"
+
+    # Inject Garmin daily metrics (HRV, sleep, resting HR, load) — synced daily
+    if daily_metrics:
+        dm_text = db.format_daily_metrics(daily_metrics, max_days=7)
+        if dm_text:
+            template += "\n\n## Dagliga halsomatningar fran Garmin (senaste 7 dagarna, nyast forst)\n"
+            template += ("Detta ar faktiska matvarden, synkade automatiskt. De ar farskare an "
+                         "motsvarande varden i 'Extra halsodata' — anvand dessa for HRV, vilopuls, "
+                         "somn och belastning. Vag in dem i bedomningen av dagsform och planering.\n")
+            template += dm_text
 
     # Inject coach memory (relational observations)
     if coach_memories:
@@ -667,7 +678,12 @@ async def chat(req: ChatRequest, request: Request):
         current_plan = db.get_planned_sessions(uid, token, from_d, to_d)
     except Exception:
         pass
-    system_prompt = _build_system_prompt(profile, activities, coach_memories, current_plan)
+    try:
+        daily_metrics = db.get_daily_metrics(uid, days=14)
+    except Exception as e:
+        print(f"[daily_metrics] {e}")
+        daily_metrics = None
+    system_prompt = _build_system_prompt(profile, activities, coach_memories, current_plan, daily_metrics)
 
     # DominaTrixa persona override
     if req.domina:
@@ -873,12 +889,19 @@ async def debug_context(request: Request):
         plan = db.get_planned_sessions(uid, token, from_d, to_d)
     except Exception as e:
         errors.append(f"plan: {e}")
+    metrics = None
+    try:
+        metrics = db.get_daily_metrics(uid, days=14)
+    except Exception as e:
+        errors.append(f"daily_metrics: {e}")
 
     return {
         "profile_fields": db.profile_to_dict(profile) if profile else None,
         "activities_count": len(activities) if activities else 0,
         "memories": memories or [],
         "planned_sessions": len(plan) if plan else 0,
+        "daily_metrics_count": len(metrics) if metrics else 0,
+        "latest_daily_metric": metrics[0] if metrics else None,
         "errors": errors,
     }
 
@@ -1301,7 +1324,14 @@ async def coach_brief(request: Request, refresh: int = 0, domina: int = 0):
     except Exception:
         memories = []
 
-    if not activities and not memories:
+    try:
+        brief_metrics = db.get_daily_metrics(uid, days=7)
+    except Exception as e:
+        print(f"[daily_metrics] {e}")
+        brief_metrics = []
+    metrics_text = db.format_daily_metrics(brief_metrics, max_days=3)
+
+    if not activities and not memories and not brief_metrics:
         return {"brief": "Koppla Strava eller chatta med mig sa jag kan lara kanna dig!", "follow_up": None}
 
     act_lines = []
@@ -1404,6 +1434,7 @@ Regler:
 - Om inget genomfort idag: paminn om dagens planerade pass.
 - Referera till FAKTISK data (typ, puls, fart, distans)
 - Om du ser monster (overtraning, for hart, bra trend) — namna det
+- Vag in HRV, vilopuls, somn och belastningskvot om de finns (t.ex. lag HRV eller hog akut/kronisk-kvot = var forsiktig)
 - Svara pa svenska, tilltala vid namn
 
 Idag ar {weekday} {now.strftime('%Y-%m-%d')}."""
@@ -1413,6 +1444,9 @@ Idag ar {weekday} {now.strftime('%Y-%m-%d')}."""
 Dagens GENOMFORDA pass: {today_done or 'Inget genomfort annu'}
 Dagens PLANERADE pass: {plan_today or 'Inget planerat'}
 Gardagens pass: {yesterday_activity or 'Vila / inget registrerat'}
+
+Halsomatningar fran Garmin (senaste dagarna, nyast forst):
+{metrics_text or 'Ingen data'}
 
 Senaste 14 dagars traning:
 {chr(10).join(act_lines) if act_lines else 'Ingen data'}

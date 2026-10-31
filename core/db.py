@@ -453,6 +453,68 @@ def get_recent_activities(user_id: str, access_token: str, days: int = 14) -> li
     return out
 
 
+# ── Garmin daily metrics (HRV, sömn, vilopuls, belastning) ──────
+
+def get_daily_metrics(user_id: str, days: int = 14) -> list[dict]:
+    """Daily health metrics synced from Garmin into garmin_coach.daily_metrics.
+    Keyed by garmin_coach.athlete_profile.id, so resolve user_id first.
+    Admin client, explicitly filtered by user_id. Newest first."""
+    admin = get_admin_client()
+    gc = admin.schema("garmin_coach")
+    ap = gc.table("athlete_profile").select("id").eq("user_id", user_id).limit(1).execute()
+    if not ap.data:
+        return []
+    since = (date.today() - timedelta(days=days)).isoformat()
+    result = (
+        gc.table("daily_metrics")
+        .select("metric_date, hrv_status, hrv_last_night_ms, hrv_weekly_avg_ms, "
+                "hrv_baseline_low, hrv_baseline_high, sleep_score, sleep_duration_sec, "
+                "readiness_score, body_battery_high, body_battery_low, stress_avg, "
+                "resting_hr, weight_kg, vo2max_running, vo2max_cycling, training_status, "
+                "acute_load, chronic_load, load_ratio, recovery_time_hours")
+        .eq("athlete_id", ap.data[0]["id"])
+        .gte("metric_date", since)
+        .order("metric_date", desc=True)
+        .execute()
+    )
+    return result.data or []
+
+
+def format_daily_metrics(metrics: list[dict], max_days: int = 7) -> str:
+    """Compact Swedish text lines for prompts."""
+    lines = []
+    for m in metrics[:max_days]:
+        p = [m["metric_date"]]
+        if m.get("hrv_last_night_ms") is not None:
+            s = f"HRV {m['hrv_last_night_ms']:g} ms"
+            if m.get("hrv_weekly_avg_ms") is not None:
+                s += f" (7d snitt {m['hrv_weekly_avg_ms']:g}"
+                if m.get("hrv_baseline_low") is not None and m.get("hrv_baseline_high") is not None:
+                    s += f", baslinje {m['hrv_baseline_low']:g}–{m['hrv_baseline_high']:g}"
+                s += ")"
+            p.append(s)
+        if m.get("hrv_status"): p.append(f"HRV-status {m['hrv_status']}")
+        if m.get("resting_hr") is not None: p.append(f"vilopuls {m['resting_hr']}")
+        if m.get("sleep_score") is not None: p.append(f"sömnpoäng {m['sleep_score']}")
+        if m.get("sleep_duration_sec"): p.append(f"sömn {m['sleep_duration_sec'] / 3600:.1f} h")
+        if m.get("readiness_score") is not None: p.append(f"readiness {m['readiness_score']}")
+        if m.get("body_battery_high") is not None: p.append(f"body battery {m.get('body_battery_low')}–{m['body_battery_high']}")
+        if m.get("stress_avg") is not None: p.append(f"stress {m['stress_avg']}")
+        if m.get("acute_load") is not None and m.get("chronic_load") is not None:
+            s = f"belastning akut {m['acute_load']:g}/kronisk {m['chronic_load']:g}"
+            if m.get("load_ratio") is not None:
+                s += f" (kvot {m['load_ratio']:.2f})"
+            p.append(s)
+        if m.get("training_status"): p.append(f"status {m['training_status']}")
+        if m.get("recovery_time_hours"): p.append(f"återhämtning {m['recovery_time_hours']} h")
+        if m.get("weight_kg") is not None: p.append(f"vikt {m['weight_kg']:g} kg")
+        if m.get("vo2max_running") is not None: p.append(f"VO2max löp {m['vo2max_running']:g}")
+        if m.get("vo2max_cycling") is not None: p.append(f"VO2max cykel {m['vo2max_cycling']:g}")
+        if len(p) > 1:
+            lines.append("- " + ", ".join(p))
+    return "\n".join(lines)
+
+
 # ── Coach Memory ────────────────────────────────────────────────
 
 def save_memory_observations(user_id: str, observations: list[dict]):
