@@ -476,6 +476,7 @@ _SPORT_ALIASES = {
     "run": "run", "lopning": "run", "löpning": "run", "virtualrun": "run",
     "strength": "strength", "styrka": "strength", "weighttraining": "strength",
     "yoga": "yoga", "promenad": "walk", "walk": "walk",
+    "övrigt": "other", "ovrigt": "other", "vila": "rest", "rest": "rest",
 }
 _SYNCED_SOURCES = {"strava", "tp", "garmin"}
 
@@ -491,6 +492,33 @@ def _same_session(a: dict, b: dict) -> bool:
     if not da or not db_:
         return True
     return abs(da - db_) <= 0.4 * max(da, db_)
+
+
+def match_activities_to_sessions(plans: list[dict], acts: list[dict]) -> tuple[list[dict | None], list[dict]]:
+    """Pair each planned session (same day) with at most one activity.
+    1) explicit training_log.planned_session_id link, 2) same normalized sport.
+    An activity is never used twice, and never matched across sports.
+    Returns (match per plan, unmatched activities)."""
+    matches: list[dict | None] = [None] * len(plans)
+    used: set[int] = set()
+    for i, p in enumerate(plans):
+        if not p.get("id"):
+            continue
+        for a in acts:
+            if id(a) not in used and a.get("planned_session_id") == p["id"]:
+                matches[i] = a
+                used.add(id(a))
+                break
+    for i, p in enumerate(plans):
+        if matches[i] is not None:
+            continue
+        ps = _norm_sport(p.get("sport"))
+        for a in acts:
+            if id(a) not in used and _norm_sport(a.get("sport") or a.get("type")) == ps:
+                matches[i] = a
+                used.add(id(a))
+                break
+    return matches, [a for a in acts if id(a) not in used]
 
 
 def dedupe_activities(acts: list[dict]) -> list[dict]:

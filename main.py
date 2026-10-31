@@ -1001,34 +1001,43 @@ async def plan_status(request: Request):
         is_today = (i == 0)
 
         day_plans = [p for p in planned if p.get("date") == date_str]
-        # Build list of individual sessions for this day
+        day_activities = [a for a in activities if a.get("date") == date_str]
+        # Match activities to sessions one-to-one, so a completed first
+        # session doesn't mark the whole day (both sessions) as done.
+        matches, extra_acts = db.match_activities_to_sessions(day_plans, day_activities)
+
+        def _act_summary(a: dict) -> str:
+            p = [a.get("type", "")]
+            if a.get("duration_min"): p.append(f"{int(a['duration_min'])}min")
+            if a.get("distance_km"): p.append(f"{a['distance_km']}km")
+            return " ".join(p)
+
         sessions_list = []
-        for p in day_plans:
+        for p, a in zip(day_plans, matches):
+            done = a is not None or p.get("status") == "completed"
             sessions_list.append({
                 "title": p.get("title", ""),
                 "details": p.get("details", ""),
                 "purpose": p.get("purpose", ""),
                 "sport": p.get("sport", ""),
                 "duration_min": p.get("duration_min"),
+                "status": p.get("status"),
+                "done": done,
+                "actual": _act_summary(a) if a else "",
             })
         plan_title = " + ".join(s["title"] for s in sessions_list) if sessions_list else ""
         plan_details = sessions_list[0]["details"] if sessions_list else ""
         plan_purpose = sessions_list[0]["purpose"] if sessions_list else ""
 
-        day_activities = [a for a in activities if a.get("date") == date_str]
-        actual_summary = ""
-        if day_activities:
-            parts = []
-            for a in day_activities:
-                p = [a.get("type", "")]
-                if a.get("duration_min"): p.append(f"{int(a['duration_min'])}min")
-                if a.get("distance_km"): p.append(f"{a['distance_km']}km")
-                parts.append(" ".join(p))
-            actual_summary = " + ".join(parts)
+        actual_summary = " + ".join(_act_summary(a) for a in day_activities)
+        extra_summary = " + ".join(_act_summary(a) for a in extra_acts)
 
-        if day_activities:
-            is_rest = plan_title and ("vila" in plan_title.lower())
-            status = "yellow" if is_rest else "green"
+        training = [s for s in sessions_list if db._norm_sport(s["sport"]) != "rest"]
+        all_done = bool(training) and all(s["done"] for s in training)
+        if day_activities and not training:
+            status = "yellow" if day_plans else "green"  # trained on rest day / unplanned
+        elif all_done:
+            status = "green"
         elif is_today:
             status = "today"
         else:
@@ -1042,6 +1051,7 @@ async def plan_status(request: Request):
             "details": plan_details,
             "purpose": plan_purpose,
             "actual": actual_summary,
+            "extra": extra_summary,
             "status": status,
             "is_today": is_today,
         })
@@ -1358,7 +1368,13 @@ async def coach_brief(request: Request, refresh: int = 0, domina: int = 0):
         today_str = now.strftime("%Y-%m-%d")
         plan_sessions = db.get_planned_sessions(uid, token, today_str, today_str)
         if plan_sessions:
-            plan_today = ", ".join(p.get("title", "") for p in plan_sessions)
+            today_acts = [a for a in (activities or []) if a.get("date") == today_str]
+            matches, _ = db.match_activities_to_sessions(plan_sessions, today_acts)
+            labels = []
+            for p, a in zip(plan_sessions, matches):
+                done = a is not None or p.get("status") == "completed"
+                labels.append(f"{p.get('title', '')} ({'KLART' if done else 'KVAR att gora'})")
+            plan_today = ", ".join(labels)
     except Exception:
         pass
 
@@ -1431,8 +1447,8 @@ Regler:
 - Max 3 meningar, direkt och {'sarkastisk' if domina else 'varm'}
 - STALL ALDRIG FRAGOR. Inga fragetecken. Bara pastaenden, analys, observationer och {'han' if domina else 'uppmaningar'}.
 - Anledning: atleten kan inte svara i denna ruta — den ar enbart for visning.
-- PRIORITET: Om atleten REDAN genomfort ett pass idag — kommentera det passet (data, prestation, analys). Namna INTE det planerade passet om det redan ar gjort.
-- Om inget genomfort idag: paminn om dagens planerade pass.
+- PRIORITET: Om atleten REDAN genomfort ett pass idag — kommentera det passet (data, prestation, analys). Namna INTE planerade pass markerade KLART.
+- Planerade pass markerade "KVAR att gora" ar INTE gjorda — paminn om dem, aven om ett annat pass redan ar klart idag.
 - Referera till FAKTISK data (typ, puls, fart, distans)
 - Om du ser monster (overtraning, for hart, bra trend) — namna det
 - Vag in HRV, vilopuls, somn och belastningskvot om de finns (t.ex. lag HRV eller hog akut/kronisk-kvot = var forsiktig)
@@ -1455,7 +1471,7 @@ Senaste 14 dagars traning:
 Minnesanteckningar om atleten:
 {chr(10).join(mem_lines) if mem_lines else 'Inga anteckningar annu'}
 
-VIKTIGT: Om det finns genomforda pass idag, kommentera DEM — inte planerade pass som redan ar klara."""
+VIKTIGT: Om det finns genomforda pass idag, kommentera DEM. Pass markerade "KVAR att gora" aterstar fortfarande — ett genomfort pass betyder INTE att hela dagen ar klar."""
 
     try:
         response = api_client.messages.create(
