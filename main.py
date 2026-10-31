@@ -130,6 +130,8 @@ def _build_system_prompt(profile: dict | None, activities: list[dict] | None = N
                 parts.append(f"puls {a['avg_hr']}")
             if a.get("avg_power"):
                 parts.append(f"{a['avg_power']}W")
+            if a.get("athlete_note"):
+                parts.append(f"atletens anteckning: \"{a['athlete_note']}\"")
             if a.get("rating"):
                 parts.append(f"betyg: {a['rating']}/5")
                 if a.get("rating_comment"):
@@ -1127,8 +1129,7 @@ async def get_exercise_logs(request: Request, date: str = ""):
     uid, token = _get_auth(request)
     if not date:
         raise HTTPException(400, "date parameter required")
-    client = db.get_client()
-    client.postgrest.auth(token)
+    client = db.get_user_client(token)
     result = (
         client.table("exercise_logs")
         .select("*")
@@ -1847,8 +1848,7 @@ async def rate_activity(strava_id: int, request: Request):
 async def workout_preferences(request: Request):
     """Get user's workout type preferences based on ratings."""
     uid, token = _get_auth(request)
-    client = db.get_client()
-    client.postgrest.auth(token)
+    client = db.get_user_client(token)
     result = client.table("strava_activities") \
         .select("type, rating") \
         .eq("user_id", uid) \
